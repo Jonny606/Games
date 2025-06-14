@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Soccer Ultimate Team</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- This will hold the 3D game canvas -->
+    <div id="game-container"></div>
+
+    <!-- This holds all the UI elements, overlays the 3D scene -->
+    <div id="ui-container">
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="screen active">
+            <h1>Loading Game...</h1>
+            <div class="spinner"></div>
+        </div>
+        
+        <!-- Main Menu -->
+        <div id="main-menu" class="screen">
+            <div class="currency-display">💰 <span id="gold-balance">0</span> Gold</div>
+            <h1>Main Menu</h1>
+            <button id="play-btn">Play Penalty Shootout</button>
+            <button id="squad-btn">View My Squad</button>
+            <button id="packs-btn">Open Packs</button>
+        </div>
+
+        <!-- Squad Screen -->
+        <div id="squad-screen" class="screen">
+            <h1>My Squad (<span id="player-count">0</span> / 200)</h1>
+            <p>Select 5 players for the penalty shootout.</p>
+            <div id="squad-list" class="player-grid"></div>
+            <div class="penalty-takers-display">
+                <h3>Penalty Takers:</h3>
+                <div id="penalty-takers-list"></div>
+            </div>
+            <button class="back-btn" data-target="main-menu">Back to Menu</button>
+        </div>
+
+        <!-- Pack Store Screen -->
+        <div id="pack-store" class="screen">
+            <h1>Pack Store</h1>
+            <div class="pack-item">
+                <h2>Standard Gold Pack</h2>
+                <p>Contains 1 player card.</p>
+                <button id="buy-pack-btn" data-cost="1000">Buy for 1000 💰</button>
+            </div>
+            <button class="back-btn" data-target="main-menu">Back to Menu</button>
+        </div>
+        
+        <!-- Pack Opening Animation -->
+        <div id="pack-opening-animation" class="screen">
+            <div class="pack-reveal-wrapper">
+                <div id="reveal-flag" class="reveal-item"></div>
+                <div id="reveal-position" class="reveal-item"></div>
+                <div id="reveal-card-container"></div>
+                <button id="pack-continue-btn">Continue</button>
+            </div>
+        </div>
+
+        <!-- Penalty Game UI -->
+        <div id="penalty-game-ui" class="screen">
+            <div class="game-hud">
+                <div id="penalty-score">Player 0 - 0 Opponent</div>
+                <div id="penalty-info">Round 1/5: Your Turn to Shoot</div>
+            </div>
+            <div class="shot-controls">
+                 <div id="aim-reticle"></div>
+                 <div class="power-bar-container">
+                    <span>POWER</span>
+                    <div class="power-bar">
+                        <div id="power-bar-inner"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="result-message"></div>
+        </div>
+
+    </div>
+
+    <!-- Include the Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Our scripts -->
+    <script src="players.js"></script>
+    <script src="game.js"></script>
+
+</body>
+</html>
