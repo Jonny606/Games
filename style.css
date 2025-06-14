@@ -1,0 +1,353 @@
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700&family=Teko:wght@400;700&display=swap');
+
+:root {
+    --bg-color: #1a1a2e;
+    --primary-color: #16213e;
+    --secondary-color: #0f3460;
+    --accent-color: #e94560;
+    --text-color: #ffffff;
+    --gold-color: #ffd700;
+}
+
+body {
+    margin: 0;
+    font-family: 'Teko', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+#game-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+}
+
+#ui-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* Allows clicks to go through to canvas unless an element is targeted */
+}
+
+/* --- General UI Components --- */
+.screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 52, 96, 0.8);
+    backdrop-filter: blur(5px);
+    pointer-events: all;
+    padding: 20px;
+    box-sizing: border-box;
+}
+.screen.active {
+    display: flex;
+}
+
+h1 {
+    font-size: 4em;
+    margin: 0 0 20px 0;
+    text-transform: uppercase;
+    text-shadow: 3px 3px 0 var(--secondary-color), -3px -3px 0 var(--accent-color);
+}
+
+button {
+    font-family: 'Teko', sans-serif;
+    font-size: 1.8em;
+    padding: 10px 40px;
+    border: 3px solid var(--text-color);
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    margin: 10px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+button:hover {
+    background-color: var(--accent-color);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+.back-btn, #pack-continue-btn {
+    position: absolute;
+    bottom: 30px;
+}
+#pack-continue-btn { display: none; }
+
+.currency-display {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-size: 2em;
+    padding: 5px 15px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 10px;
+    color: var(--gold-color);
+    font-weight: bold;
+}
+
+/* Loading Spinner */
+.spinner {
+    border: 8px solid rgba(255, 255, 255, 0.3);
+    border-top: 8px solid var(--accent-color);
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- Player Card Styling --- */
+.player-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+    padding: 20px;
+    width: 90%;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.2);
+    border-radius: 10px;
+}
+.player-card {
+    aspect-ratio: 3 / 4;
+    position: relative;
+    border-radius: 15px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: linear-gradient(160deg, #1D2B53, #7E2553);
+    border: 2px solid var(--text-color);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+.player-card.selected {
+    border-color: var(--gold-color);
+    transform: scale(1.05);
+}
+.player-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 25px rgba(255,215,0,0.3);
+}
+
+.player-card .card-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.1;
+    position: absolute;
+}
+.player-card .player-img {
+    position: absolute;
+    top: 25%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    height: auto;
+    -webkit-filter: drop-shadow(5px 5px 5px #222);
+    filter: drop-shadow(5px 5px 5px #222);
+}
+.player-card .player-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 5px;
+    box-sizing: border-box;
+    text-align: center;
+}
+.player-card .player-name {
+    font-size: 1.2em;
+    margin: 0;
+    font-family: 'Roboto Condensed', sans-serif;
+    font-weight: 700;
+}
+.player-card .player-rating {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 2em;
+    font-weight: 700;
+    color: var(--gold-color);
+    text-shadow: 2px 2px 0 #000;
+}
+.player-card .player-nation-pos {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    text-align: right;
+}
+.player-nation-pos img {
+    width: 30px;
+    margin-bottom: 5px;
+    border: 1px solid #fff;
+}
+.player-nation-pos span {
+    display: block;
+    font-size: 1.2em;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 5px;
+    border-radius: 5px;
+}
+
+/* --- Pack Opening Animation --- */
+#pack-opening-animation .pack-reveal-wrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.reveal-item {
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+#reveal-flag {
+    width: 150px;
+    height: 100px;
+    background-size: cover;
+    background-position: center;
+    border: 3px solid #fff;
+    border-radius: 10px;
+    box-shadow: 0 0 30px rgba(255,255,255,0.5);
+}
+#reveal-position {
+    font-size: 4em;
+    font-weight: bold;
+    text-shadow: 2px 2px 0 var(--accent-color);
+}
+#reveal-card-container {
+    perspective: 1000px;
+}
+#reveal-card-container .player-card {
+    width: 250px;
+    height: 333px;
+    pointer-events: none;
+    animation: card-reveal 1s forwards;
+    opacity: 0;
+}
+@keyframes card-reveal {
+    from { transform: rotateY(180deg) scale(0.8); opacity: 0; }
+    to { transform: rotateY(0deg) scale(1); opacity: 1; }
+}
+
+/* Walkout flare animation */
+.walkout-flare {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(255,215,0,0.6) 0%, rgba(255,215,0,0) 70%);
+    transform: translate(-50%, -50%) scale(0);
+    animation: flare 1.5s 0.8s forwards;
+    border-radius: 50%;
+    z-index: -1;
+}
+@keyframes flare {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+    50% { transform: translate(-50%, -50%) scale(1.5); }
+    100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+}
+
+/* --- Penalty Game UI --- */
+#penalty-game-ui {
+    justify-content: space-between;
+    background: none;
+    backdrop-filter: none;
+}
+.game-hud {
+    position: absolute;
+    top: 20px;
+    width: 100%;
+    text-align: center;
+    font-size: 2em;
+    text-shadow: 2px 2px 4px #000;
+}
+.shot-controls {
+    position: absolute;
+    bottom: 5%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+#aim-reticle {
+    width: 50px;
+    height: 50px;
+    border: 3px solid var(--accent-color);
+    border-radius: 50%;
+    position: fixed; /* so it positions relative to viewport */
+    transform: translate(-50%, -50%);
+    background: rgba(233, 69, 96, 0.2);
+    pointer-events: none;
+    display: none;
+}
+#aim-reticle.visible { display: block; }
+
+.power-bar-container {
+    width: 400px;
+    text-align: center;
+    font-size: 1.5em;
+    margin-top: 20px;
+}
+.power-bar {
+    width: 100%;
+    height: 30px;
+    background: rgba(0,0,0,0.5);
+    border: 2px solid #fff;
+    border-radius: 15px;
+    padding: 3px;
+}
+#power-bar-inner {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #ffff00, #ff8c00, var(--accent-color));
+    border-radius: 10px;
+    transition: width 0.05s linear;
+}
+
+#result-message {
+    font-size: 5em;
+    text-shadow: 3px 3px 0 var(--secondary-color), -3px -3px 0 var(--accent-color);
+    display: none;
+}
+
+.penalty-takers-display {
+    margin-top: 20px;
+}
+#penalty-takers-list {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+#penalty-takers-list .player-card {
+    width: 80px;
+    height: 106px;
+    font-size: 0.5em;
+}
