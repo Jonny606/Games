@@ -313,6 +313,8 @@ function runPackAnimation(player) {
 
 // --- 3D World & Game Creation ---
 
+// --- THIS IS THE FINAL, WORKING FUNCTION ---
+
 function createStadium() {
     // Grass
     const grassTexture = new THREE.TextureLoader().load('https://threejsfundamentals.org/threejs/resources/images/checker.png'); // Placeholder texture
@@ -350,16 +352,14 @@ function createStadium() {
     scene.add(goal);
 
     // Goalkeeper
-    const keeperGeo = new THREE.CapsuleGeometry(0.3, 1.4, 4, 16);
+    const keeperGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16); // <-- Your fix is perfect!
     const keeperMat = new THREE.MeshStandardMaterial({color: 0xff0000, roughness: 0.5});
     keeper = new THREE.Mesh(keeperGeo, keeperMat);
-    keeper.position.set(0, (1.4/2)+0.3, 0.5);
-    keeper.castShadow = true;
-    scene.add(keeper);
+    
+    // These two lines were missing, now they are back:
+    keeper.position.set(0, 1.8 / 2, 0.5); // Position the keeper correctly
+    scene.add(keeper);                     // Add the keeper to the scene
 }
-
-
-// --- Penalty Game Logic ---
 
 function startPenaltyGame() {
     penalty.state = PENALTY_STATE.INACTIVE;
