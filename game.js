@@ -1,7 +1,7 @@
 // game.js
 
 // --- Global State & Constants ---
-let scene, camera, renderer, clock;
+let scene, camera, renderer, clock, textureLoader;
 let ball, goal, keeper;
 let playerState = {
     gold: 5000,
@@ -23,6 +23,7 @@ const PENALTY_STATE = {
     AIMING: 'aiming',
     POWERING: 'powering',
     SHOT_TAKEN: 'shot_taken',
+    ANIMATING_KEEPER: 'animating_keeper',
     KEEPER_TURN: 'keeper_turn',
     END_ROUND: 'end_round'
 };
@@ -33,6 +34,7 @@ let penalty = {
     opponentScore: 0,
     shotPower: 0,
     aim: new THREE.Vector3(),
+    keeperDive: { active: false, start: null, end: null, duration: 0.4 }
 };
 
 // --- Initialization ---
@@ -42,28 +44,36 @@ function init() {
 
     // 3D Scene Setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0x87CEEB, 10, 50);
+    scene.background = new THREE.Color(0x87CEEB); // Sky color
+    scene.fog = new THREE.Fog(0x87CEEB, 20, 60);
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; // More realistic lighting
+    renderer.toneMappingExposure = 1.0;
+
     document.getElementById('game-container').appendChild(renderer.domElement);
     
     clock = new THREE.Clock();
+    textureLoader = new THREE.TextureLoader();
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(-5, 10, 5);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(10, 15, 5);
     dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.top = 20;
+    dirLight.shadow.camera.bottom = -20;
+    dirLight.shadow.camera.left = -20;
+    dirLight.shadow.camera.right = 20;
+    dirLight.shadow.bias = -0.001;
     scene.add(dirLight);
 
     createStadium();
@@ -72,7 +82,7 @@ function init() {
     setTimeout(() => {
         showScreen('mainMenu');
         updateGoldUI();
-    }, 1500); // Simulate loading time
+    }, 1500);
 
     animate();
 }
@@ -95,8 +105,7 @@ function loadPlayerState() {
     if (savedState) {
         playerState = JSON.parse(savedState);
     } else {
-        // Give player a starter team
-        playerState.myPlayers = [1, 3, 6, 9, 21]; // Some good starter players
+        playerState.myPlayers = [1, 3, 6, 9, 21];
     }
 }
 
@@ -117,29 +126,41 @@ function renderSquad() {
     renderPenaltyTakers();
 }
 
+// NEW: Renders the "Team Sheet" view for the 5 selected penalty takers.
 function renderPenaltyTakers() {
-    const list = document.getElementById('penalty-takers-list');
-    list.innerHTML = '';
-    for(let i=0; i<5; i++){
+    const lineupEl = document.getElementById('team-sheet-lineup');
+    lineupEl.innerHTML = ''; // Clear previous slots
+    for (let i = 0; i < 5; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'lineup-slot';
         const playerId = playerState.penaltyTakers[i];
-        if(playerId) {
+        
+        if (playerId) {
             const player = ALL_PLAYERS.find(p => p.id === playerId);
-            list.appendChild(createPlayerCard(player, 'taker'));
+            slot.classList.add('filled');
+            slot.innerHTML = `
+                <img class="player-img" src="${player.image}" alt="${player.name}">
+                <div class="slot-info">
+                    <h3>${player.name}</h3>
+                    <p>Rating: ${player.rating}</p>
+                </div>
+            `;
         } else {
-            const placeholder = document.createElement('div');
-            placeholder.className = 'player-card';
-            placeholder.style.borderStyle = 'dashed';
-            list.appendChild(placeholder);
+            slot.innerHTML = `<span class="slot-role">Taker ${i + 1}</span>`;
         }
+        lineupEl.appendChild(slot);
     }
 }
 
+// UPDATED: Now allows deselecting a player by clicking them again.
 function handleSquadCardClick(player, cardElement) {
     const isSelected = playerState.penaltyTakers.includes(player.id);
-    if(isSelected) {
+    if (isSelected) {
+        // Player is already selected, so DESELECT them
         playerState.penaltyTakers = playerState.penaltyTakers.filter(id => id !== player.id);
         cardElement.classList.remove('selected');
     } else {
+        // Player is not selected, so SELECT them
         if (playerState.penaltyTakers.length < 5) {
             playerState.penaltyTakers.push(player.id);
             cardElement.classList.add('selected');
@@ -147,7 +168,7 @@ function handleSquadCardClick(player, cardElement) {
             alert('You can only select 5 penalty takers.');
         }
     }
-    renderPenaltyTakers();
+    renderSquad(); // Rerender both the grid and the team sheet
     savePlayerState();
 }
 
@@ -158,17 +179,11 @@ function createPlayerCard(player, context = 'default') {
         card.classList.add('selected');
     }
 
-    // Set background gradient based on rating
-    let bgGradient = 'linear-gradient(160deg, #4b5a6a, #202b36)'; // Default (bronze/silver)
-    if (player.rating >= 90) {
-        bgGradient = 'linear-gradient(160deg, #FFD700, #B8860B)'; // Gold/Legend
-    } else if (player.rating >= 85) {
-        bgGradient = 'linear-gradient(160deg, #3498db, #2980b9)'; // Blue/Rare
-    } else if (player.rating >= 80) {
-        bgGradient = 'linear-gradient(160deg, #50c878, #3e9e62)'; // Green/Uncommon
-    }
-    
-    card.style.background = bgGradient; // <-- THIS WAS THE FINAL BUG
+    let bgGradient = 'linear-gradient(160deg, #4b5a6a, #202b36)';
+    if (player.rating >= 90) bgGradient = 'linear-gradient(160deg, #FFD700, #B8860B)';
+    else if (player.rating >= 85) bgGradient = 'linear-gradient(160deg, #3498db, #2980b9)';
+    else if (player.rating >= 80) bgGradient = 'linear-gradient(160deg, #50c878, #3e9e62)';
+    card.style.background = bgGradient;
 
     card.innerHTML = `
         <img class="player-img" src="${player.image}" alt="${player.name}">
@@ -179,8 +194,8 @@ function createPlayerCard(player, context = 'default') {
         </div>
         <div class="player-info">
             <h3 class="player-name">${player.name}</h3>
-        </div>
-    `;
+        </div>`;
+
     if (context === 'squad') {
         card.addEventListener('click', () => handleSquadCardClick(player, card));
     }
@@ -206,21 +221,23 @@ function setupEventListeners() {
     document.getElementById('packs-btn').addEventListener('click', () => showScreen('store'));
     
     document.querySelectorAll('.back-btn').forEach(btn => {
-        btn.addEventListener('click', () => showScreen(btn.dataset.target));
+        btn.addEventListener('click', () => {
+            penalty.state = PENALTY_STATE.INACTIVE; // Stop game if backing out
+            showScreen(btn.dataset.target)
+        });
     });
 
     document.getElementById('buy-pack-btn').addEventListener('click', buyPack);
     document.getElementById('pack-continue-btn').addEventListener('click', () => showScreen('store'));
     
-    // Penalty controls
     window.addEventListener('mousemove', onMouseMove, false);
     window.addEventListener('mousedown', onMouseDown, false);
     window.addEventListener('mouseup', onMouseUp, false);
 }
 
 
-// --- Pack Opening Logic ---
-
+// --- Pack Opening Logic (Unchanged) ---
+// ... (The pack opening functions remain the same as before) ...
 function buyPack() {
     const cost = 1000;
     if (playerState.gold >= cost) {
@@ -233,95 +250,56 @@ function buyPack() {
         alert("Not enough gold!");
     }
 }
-
 function openPack() {
-    // Weighted random selection
     const weights = ALL_PLAYERS.map(p => {
-        if (p.rating >= 90) return 1;  // very rare
-        if (p.rating >= 87) return 5;  // rare
-        if (p.rating >= 84) return 20; // uncommon
-        return 74; // common
+        if (p.rating >= 90) return 1; if (p.rating >= 87) return 5; if (p.rating >= 84) return 20; return 74;
     });
     const totalWeight = weights.reduce((a, b) => a + b, 0);
     let random = Math.random() * totalWeight;
-
     let playerToReveal;
     for (let i = 0; i < ALL_PLAYERS.length; i++) {
         random -= weights[i];
-        if (random <= 0) {
-            playerToReveal = ALL_PLAYERS[i];
-            break;
-        }
+        if (random <= 0) { playerToReveal = ALL_PLAYERS[i]; break; }
     }
-    
     if (!playerState.myPlayers.includes(playerToReveal.id)) {
         playerState.myPlayers.push(playerToReveal.id);
     } else {
-        // It's a duplicate, give some gold back
-        const duplicateGold = Math.floor(playerToReveal.rating * 5);
-        playerState.gold += duplicateGold;
+        playerState.gold += Math.floor(playerToReveal.rating * 5);
         updateGoldUI();
-        // Here you could add a message saying it was a duplicate.
     }
     savePlayerState();
     runPackAnimation(playerToReveal);
 }
-
 function runPackAnimation(player) {
-    const flagEl = document.getElementById('reveal-flag');
-    const posEl = document.getElementById('reveal-position');
-    const cardContainer = document.getElementById('reveal-card-container');
-    const continueBtn = document.getElementById('pack-continue-btn');
-
-    flagEl.style.opacity = 0;
-    posEl.style.opacity = 0;
-    cardContainer.innerHTML = '';
-    continueBtn.style.display = 'none';
-
-    // Clear previous animations if any
-    const oldFlare = document.querySelector('.walkout-flare');
-    if (oldFlare) oldFlare.remove();
-    
-    setTimeout(() => { // 1. Reveal Flag
-        flagEl.style.backgroundImage = `url(https://flagcdn.com/h120/${player.nation}.png)`;
-        flagEl.style.opacity = 1;
-        flagEl.style.transform = 'scale(1)';
-    }, 500);
-
-    setTimeout(() => { // 2. Reveal Position
-        posEl.textContent = player.position;
-        posEl.style.opacity = 1;
-        posEl.style.transform = 'scale(1)';
-    }, 1500);
-
-    setTimeout(() => { // 3. Reveal Card
+    const flagEl = document.getElementById('reveal-flag'), posEl = document.getElementById('reveal-position'), cardContainer = document.getElementById('reveal-card-container'), continueBtn = document.getElementById('pack-continue-btn');
+    flagEl.style.opacity = 0; posEl.style.opacity = 0; cardContainer.innerHTML = ''; continueBtn.style.display = 'none';
+    const oldFlare = document.querySelector('.walkout-flare'); if(oldFlare) oldFlare.remove();
+    setTimeout(() => { flagEl.style.backgroundImage = `url(https://flagcdn.com/h120/${player.nation}.png)`; flagEl.style.opacity = 1; flagEl.style.transform = 'scale(1)'; }, 500);
+    setTimeout(() => { posEl.textContent = player.position; posEl.style.opacity = 1; posEl.style.transform = 'scale(1)'; }, 1500);
+    setTimeout(() => {
         const card = createPlayerCard(player);
         cardContainer.appendChild(card);
-        // Add walkout flare for high-rated players
-        if (player.rating >= 86) {
-            const flare = document.createElement('div');
-            flare.className = 'walkout-flare';
-            cardContainer.appendChild(flare);
-        }
+        if (player.rating >= 86) { const flare = document.createElement('div'); flare.className = 'walkout-flare'; cardContainer.appendChild(flare); }
     }, 2500);
-    
-    setTimeout(() => { // 4. Show Continue Button
-        continueBtn.style.display = 'block';
-    }, 3500);
+    setTimeout(() => { continueBtn.style.display = 'block'; }, 3500);
 }
 
 
-// --- 3D World & Game Creation ---
-
-// --- THIS IS THE FINAL, WORKING FUNCTION ---
+// --- 3D World & Game Creation (Heavily Updated) ---
 
 function createStadium() {
-    // Grass
-    const grassTexture = new THREE.TextureLoader().load('https://threejsfundamentals.org/threejs/resources/images/checker.png'); // Placeholder texture
-    grassTexture.wrapS = THREE.RepeatWrapping;
-    grassTexture.wrapT = THREE.RepeatWrapping;
-    grassTexture.repeat.set(100, 100);
-    const grassMaterial = new THREE.MeshLambertMaterial({ map: grassTexture });
+    // UPDATED: Using realistic textures for grass.
+    const grassColorMap = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg');
+    grassColorMap.wrapS = THREE.RepeatWrapping;
+    grassColorMap.wrapT = THREE.RepeatWrapping;
+    grassColorMap.repeat.set(25, 25);
+
+    const grassMaterial = new THREE.MeshStandardMaterial({
+        map: grassColorMap,
+        roughness: 0.7,
+        metalness: 0.1
+    });
+
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), grassMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -329,15 +307,15 @@ function createStadium() {
 
     // Ball
     const ballGeometry = new THREE.SphereGeometry(0.2, 32, 32);
-    const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.1 });
     ball = new THREE.Mesh(ballGeometry, ballMaterial);
     ball.castShadow = true;
-    ball.position.set(0, 0.2, 11); // Penalty spot
+    ball.position.set(0, 0.2, 11);
     scene.add(ball);
     
-    // Goal
+    // Goal with NEW transparent net
     goal = new THREE.Group();
-    const postMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.1, metalness: 0.9 });
     const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.44, 16);
     const leftPost = new THREE.Mesh(postGeo, postMaterial);
     leftPost.position.set(-3.66, 2.44 / 2, 0);
@@ -348,16 +326,39 @@ function createStadium() {
     crossbar.rotation.z = Math.PI/2;
     crossbar.position.y = 2.44;
     goal.add(leftPost, rightPost, crossbar);
-    goal.traverse(child => { child.castShadow = true; child.receiveShadow = true; });
+    
+    // The net itself
+    const netTexture = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/alpha/fence.jpg');
+    netTexture.wrapS = THREE.RepeatWrapping;
+    netTexture.wrapT = THREE.RepeatWrapping;
+    netTexture.repeat.set(14, 5);
+    const netMaterial = new THREE.MeshStandardMaterial({
+        map: netTexture,
+        alphaMap: netTexture, // Use the same texture for transparency
+        transparent: true,
+        side: THREE.DoubleSide,
+        color: 0xeeeeee,
+        roughness: 0.5
+    });
+    const netGeo = new THREE.PlaneGeometry(7.32, 2.44);
+    const net = new THREE.Mesh(netGeo, netMaterial);
+    net.position.set(0, 2.44/2, -0.1);
+    goal.add(net);
+    
+    goal.traverse(child => { if(child.isMesh) child.castShadow = true; });
     scene.add(goal);
 
     // Goalkeeper
     const keeperGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16);
-    const keeperMat = new THREE.MeshStandardMaterial({color: 0xff0000, roughness: 0.5});
+    const keeperMat = new THREE.MeshStandardMaterial({color: 0x1A5D1A, roughness: 0.8 }); // Green kit
     keeper = new THREE.Mesh(keeperGeo, keeperMat);
     keeper.position.set(0, 1.8 / 2, 0.5);
+    keeper.castShadow = true;
     scene.add(keeper);
 }
+
+
+// --- Penalty Game Logic (Heavily Updated) ---
 
 function startPenaltyGame() {
     penalty.state = PENALTY_STATE.INACTIVE;
@@ -366,6 +367,8 @@ function startPenaltyGame() {
     penalty.opponentScore = 0;
     resetBall();
     updatePenaltyHUD();
+    document.querySelector('.shot-controls').classList.add('visible');
+    
     setTimeout(() => {
         setupPlayerTurn();
     }, 1000);
@@ -380,85 +383,79 @@ function setupPlayerTurn() {
 
 function updatePenaltyHUD() {
     document.getElementById('penalty-score').textContent = `Player ${penalty.playerScore} - ${penalty.opponentScore} Opponent`;
-    document.getElementById('penalty-info').textContent = `Round ${penalty.round}/5: ${penalty.state === PENALTY_STATE.KEEPER_TURN ? 'Opponent\'s turn' : 'Your turn to shoot'}`;
+    const turnText = (penalty.state === PENALTY_STATE.KEEPER_TURN) ? "Opponent's Turn" : `Your Turn - Taker #${penalty.round}`;
+    document.getElementById('penalty-info').textContent = `Round ${penalty.round}/5: ${turnText}`;
 }
 
+// ... Mouse Events and shootBall function remain mostly the same ...
 function onMouseMove(event) {
     if (penalty.state !== PENALTY_STATE.AIMING) return;
-    
     const mouse = new THREE.Vector2();
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-    
-    // Project mouse onto the goal plane
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, camera);
     raycaster.ray.intersectPlane(plane, penalty.aim);
-
-    // Clamp the aim to be within the goal posts
     penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.5, 3.5);
     penalty.aim.y = THREE.MathUtils.clamp(penalty.aim.y, 0.1, 2.3);
-
-    // Update reticle position
     const screenPos = penalty.aim.clone().project(camera);
     const reticle = document.getElementById('aim-reticle');
     reticle.style.left = `${(screenPos.x + 1) / 2 * window.innerWidth}px`;
     reticle.style.top = `${(-screenPos.y + 1) / 2 * window.innerHeight}px`;
 }
-
-function onMouseDown(event) {
-    if (penalty.state === PENALTY_STATE.AIMING) {
-        penalty.state = PENALTY_STATE.POWERING;
-        penalty.shotPower = 0;
-    }
-}
-
-function onMouseUp(event) {
-    if (penalty.state === PENALTY_STATE.POWERING) {
-        shootBall();
-    }
-}
-
+function onMouseDown(event) { if (penalty.state === PENALTY_STATE.AIMING) { penalty.state = PENALTY_STATE.POWERING; penalty.shotPower = 0; }}
+function onMouseUp(event) { if (penalty.state === PENALTY_STATE.POWERING) { shootBall(); }}
 function shootBall() {
     penalty.state = PENALTY_STATE.SHOT_TAKEN;
     document.getElementById('aim-reticle').classList.remove('visible');
-
-    // Get current player stats
     const player = ALL_PLAYERS.find(p => p.id === playerState.penaltyTakers[penalty.round-1]);
     const stats = player.stats;
-
-    // Ball velocity based on aim, power, and player stats
-    const power = (penalty.shotPower / 100) * 20 + 10; // base velocity 10-30
-    const shotPowerStat = (stats.speed - 50) / 50; // -1 to 1
-    const finalPower = power * (1 + shotPowerStat * 0.3); // Apply +/- 30% from stats
-
-    const accuracyStat = 1 - ((stats.control-50)/50) * 0.9; // 0.1 to 1.9
-    const inaccuracy = 0.5 * accuracyStat;
-
+    const power = (penalty.shotPower / 100) * 20 + 10;
+    const finalPower = power * (1 + (stats.speed - 50) / 50 * 0.3);
+    const inaccuracy = 0.5 * (1 - (stats.control-50)/50 * 0.9);
     const direction = penalty.aim.clone().sub(ball.position).normalize();
     direction.x += (Math.random() - 0.5) * inaccuracy;
     direction.y += (Math.random() - 0.5) * inaccuracy;
-
     ball.velocity = direction.multiplyScalar(finalPower);
     ball.angularVelocity = new THREE.Vector3(-ball.velocity.z, 0, ball.velocity.x).multiplyScalar(0.1);
+
+    // NEW: Trigger the keeper's dive right after shooting
+    triggerKeeperDive();
 }
 
+
+// NEW: All logic for the keeper's dive animation.
+function triggerKeeperDive() {
+    const random = Math.random();
+    let diveTargetX = 0;
+    
+    // 45% chance to dive left, 45% right, 10% stay middle
+    if (random < 0.45) { diveTargetX = -2.5; }
+    else if (random < 0.90) { diveTargetX = 2.5; }
+    
+    penalty.keeperDive.start = keeper.position.clone();
+    penalty.keeperDive.end = new THREE.Vector3(diveTargetX, 1.8/2, keeper.position.z);
+    penalty.keeperDive.startTime = clock.getElapsedTime();
+    penalty.keeperDive.active = true;
+    penalty.state = PENALTY_STATE.ANIMATING_KEEPER;
+}
+
+
+// NEW: Logic for the opponent's turn. It's now simulated instantly.
 function handleKeeperTurn() {
     penalty.state = PENALTY_STATE.KEEPER_TURN;
     updatePenaltyHUD();
     
-    // AI keeper logic
+    // Simulate opponent's shot
     setTimeout(() => {
-        const diveSuccess = Math.random() < 0.7; // 70% chance AI saves
-        let result = "SAVED!";
-        if(diveSuccess) {
-            result = "SAVED!";
-        } else {
-            result = "GOAL!";
+        const goalScored = Math.random() < 0.7; // 70% chance AI scores
+        if (goalScored) {
             penalty.opponentScore++;
+            showResultMessage("THEY SCORE", endRound);
+        } else {
+            showResultMessage("THEY MISS!", endRound);
         }
-        showResultMessage(result, endRound);
     }, 1500);
 }
 
@@ -470,42 +467,41 @@ function endRound() {
        setupPlayerTurn();
        updatePenaltyHUD();
        resetBall();
+       resetKeeper();
     }
 }
 
 function endGame(){
-    let result = "DRAW!";
-    let reward = 500;
-    if(penalty.playerScore > penalty.opponentScore){
-        result = "YOU WIN!";
-        reward = 1500;
-    } else if (penalty.playerScore < penalty.opponentScore) {
-        result = "YOU LOSE!";
-        reward = 250;
-    }
+    document.querySelector('.shot-controls').classList.remove('visible');
+    let result = "DRAW!", reward = 500;
+    if(penalty.playerScore > penalty.opponentScore){ result = "YOU WIN!"; reward = 1500; }
+    else if (penalty.playerScore < penalty.opponentScore) { result = "YOU LOSE!"; reward = 250; }
+    
     playerState.gold += reward;
     showResultMessage(result, () => showScreen('mainMenu'));
     savePlayerState();
     updateGoldUI();
 }
 
-function checkGoal(ballPos) {
-    // Basic collision check
-    if (ballPos.z < 0 && ballPos.y > 0) { // Past goal line
-        if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) {
-            // GOAL
+function checkGoalAndSave(ballPos, keeperPos) {
+    if (ballPos.z < 0.5 && ballPos.y > 0) { // Past goal line
+        const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4));
+        const keeperRect = new THREE.Box3().setFromObject(keeper);
+        
+        if (keeperRect.intersectsBox(ballRect)) {
+            return "SAVE!";
+        } else if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) {
             penalty.playerScore++;
             return "GOAL!";
         }
     }
-    return null; // Not a goal yet
+    return null;
 }
 
 function showResultMessage(msg, callback) {
     const el = document.getElementById('result-message');
     el.textContent = msg;
     el.style.display = 'block';
-
     setTimeout(() => {
         el.style.display = 'none';
         callback();
@@ -514,11 +510,17 @@ function showResultMessage(msg, callback) {
 
 function resetBall(){
     ball.position.set(0, 0.2, 11);
-    ball.velocity = new THREE.Vector3();
-    ball.angularVelocity = new THREE.Vector3();
+    if(ball.velocity) ball.velocity.set(0,0,0);
+    if(ball.angularVelocity) ball.angularVelocity.set(0,0,0);
 }
 
-// --- Animation Loop ---
+function resetKeeper() {
+    keeper.position.set(0, 1.8 / 2, 0.5);
+    keeper.rotation.set(0,0,0);
+}
+
+
+// --- Animation Loop (Heavily Updated) ---
 
 function animate() {
     requestAnimationFrame(animate);
@@ -531,26 +533,41 @@ function animate() {
         document.getElementById('power-bar-inner').style.width = `${penalty.shotPower}%`;
     }
 
-    // Shot physics
-    if (penalty.state === PENALTY_STATE.SHOT_TAKEN && ball.velocity) {
-        ball.velocity.y -= 9.8 * delta; // Gravity
-        ball.position.add(ball.velocity.clone().multiplyScalar(delta));
-        ball.rotation.x += ball.angularVelocity.x * delta;
-        ball.rotation.z += ball.angularVelocity.z * delta;
-        
-        // Ground collision
-        if(ball.position.y < 0.2){
-            ball.position.y = 0.2;
-            ball.velocity.y *= -0.5; // bounce
+    // Shot & Keeper Animation
+    if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || penalty.state === PENALTY_STATE.SHOT_TAKEN) {
+        // Animate keeper dive
+        if (penalty.keeperDive.active) {
+            const elapsedTime = clock.getElapsedTime() - penalty.keeperDive.startTime;
+            const progress = Math.min(elapsedTime / penalty.keeperDive.duration, 1);
+            keeper.position.lerpVectors(penalty.keeperDive.start, penalty.keeperDive.end, progress);
+            
+            // Basic dive rotation
+            const diveAngle = (keeper.position.x / 2.5) * (Math.PI / 2);
+            keeper.rotation.z = -diveAngle * progress;
+
+            if (progress >= 1) penalty.keeperDive.active = false;
         }
 
-        const goalResult = checkGoal(ball.position);
-        if(goalResult) {
-            penalty.state = PENALTY_STATE.END_ROUND;
-            showResultMessage(goalResult, handleKeeperTurn);
-        } else if(ball.position.z < -2){ // went too far
-            penalty.state = PENALTY_STATE.END_ROUND;
-            showResultMessage("MISS!", handleKeeperTurn);
+        // Move the ball if shot has been taken
+        if (ball.velocity) {
+            ball.velocity.y -= 9.8 * delta; // Gravity
+            ball.position.add(ball.velocity.clone().multiplyScalar(delta));
+            ball.rotation.x += ball.angularVelocity.x * delta;
+            ball.rotation.z += ball.angularVelocity.z * delta;
+
+            if (ball.position.y < 0.2) { ball.position.y = 0.2; ball.velocity.y *= -0.5; }
+
+            // Check for goal/save only when animating
+            if(penalty.state === PENALTY_STATE.ANIMATING_KEEPER){
+                const result = checkGoalAndSave(ball.position, keeper.position);
+                if (result) {
+                    penalty.state = PENALTY_STATE.END_ROUND;
+                    showResultMessage(result, handleKeeperTurn);
+                } else if (ball.position.z < -2) { // Went too far
+                    penalty.state = PENALTY_STATE.END_ROUND;
+                    showResultMessage("MISS!", handleKeeperTurn);
+                }
+            }
         }
     }
 
