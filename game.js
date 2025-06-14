@@ -213,7 +213,8 @@ function runPackAnimation(player) {
         if (player.rating >= 86) { const flare = document.createElement('div'); flare.className = 'walkout-flare'; cardContainer.appendChild(flare); } 
     }, 2500); 
     setTimeout(() => { continueBtn.style.display = 'block'; }, 3500); 
-}// --- 3D Model Loading Section ---
+}
+// --- 3D Model Loading Section ---
 function loadEnvironment(gltfLoader) {
     const grassColorMap = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg');
     grassColorMap.wrapS = THREE.RepeatWrapping; grassColorMap.wrapT = THREE.RepeatWrapping; grassColorMap.repeat.set(25, 25);
@@ -228,30 +229,32 @@ function loadEnvironment(gltfLoader) {
     ball.castShadow = true; ball.position.set(0, 0.2, 11);
     scene.add(ball);
 
-    // Load the Goal model
-    const goalURL = 'https://raw.githubusercontent.com/baronwatts/models/master/legacy-soccer-goal.glb';
-    gltfLoader.load(goalURL, (gltf) => {
-        goal = gltf.scene;
-        goal.scale.set(1.4, 1.4, 1.4);
-        goal.position.set(0, 0, -1);
-        goal.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
-        scene.add(goal);
-    });
+    goal = new THREE.Group();
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.1, metalness: 0.9 });
+    const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.44, 16);
+    const leftPost = new THREE.Mesh(postGeo, postMaterial);
+    leftPost.position.set(-3.66, 2.44 / 2, 0);
+    const rightPost = new THREE.Mesh(postGeo, postMaterial);
+    rightPost.position.set(3.66, 2.44 / 2, 0);
+    const crossbarGeo = new THREE.CylinderGeometry(0.1, 0.1, 7.32, 16);
+    const crossbar = new THREE.Mesh(crossbarGeo, postMaterial);
+    crossbar.rotation.z = Math.PI/2;
+    crossbar.position.y = 2.44;
+    goal.add(leftPost, rightPost, crossbar);
+    goal.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
+    scene.add(goal);
 }
 
 function loadCharacters(gltfLoader) {
-    // Load the Goalkeeper model
-    const keeperURL = 'https://raw.githubusercontent.com/baronwatts/models/master/goalie.glb';
-    gltfLoader.load(keeperURL, (gltf) => {
-        keeper = gltf.scene;
-        keeper.scale.set(0.6, 0.6, 0.6);
-        keeper.position.set(0, 0, 0.5);
-        keeper.rotation.y = Math.PI;
-        keeper.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
-        scene.add(keeper);
-    });
+    const keeperGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16);
+    const keeperMat = new THREE.MeshStandardMaterial({color: 0x1A5D1A, roughness: 0.8 });
+    keeper = new THREE.Mesh(keeperGeo, keeperMat);
+    keeper.scale.set(0.6, 0.6, 0.6);
+    keeper.position.set(0, 0, 0.5);
+    keeper.rotation.y = Math.PI;
+    keeper.castShadow = true;
+    scene.add(keeper);
 
-    // Load the Shooter model
     const shooterURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Soccer%20Penalty%20Kick.glb';
     gltfLoader.load(shooterURL, (gltf) => {
         shooter = gltf.scene;
@@ -303,7 +306,7 @@ function endGame() { document.querySelector('.shot-controls').classList.remove('
 function checkGoalAndSave(ballPos) { if (ballPos.z < 0.5 && ballPos.y > 0) { const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); if (keeper) { const keeperRect = new THREE.Box3().setFromObject(keeper); if (keeperRect.intersectsBox(ballRect)) return "SAVE!"; } if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) { penalty.playerScore++; return "GOAL!"; } } return null; }
 function showResultMessage(msg, callback) { const el = document.getElementById('result-message'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; if(callback) callback(); }, 2000); }
 function resetBall() { ball.position.set(0, 0.2, 11); if (ball.velocity) ball.velocity.set(0, 0, 0); if (ball.angularVelocity) ball.angularVelocity.set(0, 0, 0); if(shooter) shooter.visible = true; }
-function resetKeeper() { if (keeper) { keeper.position.set(0, 0, 0.5); keeper.rotation.set(0, Math.PI, 0); } }
+function resetKeeper() { if (keeper) { keeper.position.set(0, 0.6, 0.5); keeper.rotation.set(0, Math.PI, 0); } }
 
 
 // --- Animation Loop ---
