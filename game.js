@@ -154,23 +154,21 @@ function handleSquadCardClick(player, cardElement) {
 function createPlayerCard(player, context = 'default') {
     const card = document.createElement('div');
     card.className = 'player-card';
-    if(playerState.penaltyTakers.includes(player.id) && context === 'squad') {
+    if (playerState.penaltyTakers.includes(player.id) && context === 'squad') {
         card.classList.add('selected');
     }
 
-   // --- THIS IS THE CORRECTED VERSION ---
-
-// Set background gradient based on rating
-let bgGradient = 'linear-gradient(160deg, #4b5a6a, #202b36)'; // A default color
-if (player.rating >= 90) {
-    bgGradient = 'linear-gradient(160deg, #FFD700, #B8860B)'; // Gold/Legend
-} else if (player.rating >= 85) {
-    bgGradient = 'linear-gradient(160deg, #3498db, #2980b9)'; // Blue/Rare
-} else if (player.rating >= 80) {
-    bgGradient = 'linear-gradient(160deg, #50c878, #3e9e62)'; // Green/Uncommon
-}
-
-card.style.background = bgGradient; // Use the corrected variable here too
+    // Set background gradient based on rating
+    let bgGradient = 'linear-gradient(160deg, #4b5a6a, #202b36)'; // Default (bronze/silver)
+    if (player.rating >= 90) {
+        bgGradient = 'linear-gradient(160deg, #FFD700, #B8860B)'; // Gold/Legend
+    } else if (player.rating >= 85) {
+        bgGradient = 'linear-gradient(160deg, #3498db, #2980b9)'; // Blue/Rare
+    } else if (player.rating >= 80) {
+        bgGradient = 'linear-gradient(160deg, #50c878, #3e9e62)'; // Green/Uncommon
+    }
+    
+    card.style.background = bgGradient; // <-- THIS WAS THE FINAL BUG
 
     card.innerHTML = `
         <img class="player-img" src="${player.image}" alt="${player.name}">
@@ -183,7 +181,7 @@ card.style.background = bgGradient; // Use the corrected variable here too
             <h3 class="player-name">${player.name}</h3>
         </div>
     `;
-    if(context === 'squad') {
+    if (context === 'squad') {
         card.addEventListener('click', () => handleSquadCardClick(player, card));
     }
     return card;
