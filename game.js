@@ -158,13 +158,19 @@ function createPlayerCard(player, context = 'default') {
         card.classList.add('selected');
     }
 
-    // Set background gradient based on rating
-    let-bg-gradient = 'linear-gradient(160deg, #4b5a6a, #202b36)';
-    if(player.rating >= 90) bg-gradient = 'linear-gradient(160deg, #ffd700, #c4a000)';
-    else if(player.rating >= 85) bg-gradient = 'linear-gradient(160deg, #3498db, #2980b9)';
-    else if(player.rating >= 80) bg-gradient = 'linear-gradient(160deg, #50c878, #3e9e62)';
-    
-    card.style.background = bg-gradient;
+   // --- THIS IS THE CORRECTED VERSION ---
+
+// Set background gradient based on rating
+let bgGradient = 'linear-gradient(160deg, #4b5a6a, #202b36)'; // A default color
+if (player.rating >= 90) {
+    bgGradient = 'linear-gradient(160deg, #FFD700, #B8860B)'; // Gold/Legend
+} else if (player.rating >= 85) {
+    bgGradient = 'linear-gradient(160deg, #3498db, #2980b9)'; // Blue/Rare
+} else if (player.rating >= 80) {
+    bgGradient = 'linear-gradient(160deg, #50c878, #3e9e62)'; // Green/Uncommon
+}
+
+card.style.background = bgGradient; // Use the corrected variable here too
 
     card.innerHTML = `
         <img class="player-img" src="${player.image}" alt="${player.name}">
