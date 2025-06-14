@@ -376,21 +376,25 @@
         // Simulate WebSocket functionality for demo
         function initializeWebSocket() {
             // In a real implementation, this would connect to a WebSocket server
-            // For demo purposes, we'll simulate local multiplayer
+            // For demo purposes, we'll simulate the connection process
             
             setTimeout(() => {
-                setConnectionStatus('disconnected', 'No server available - Playing locally');
-                enableLocalMultiplayer();
-            }, 2000);
+                setConnectionStatus('waiting', 'Ready to create or join rooms');
+                // Keep room controls visible
+            }, 1000);
         }
 
         function enableLocalMultiplayer() {
-            document.getElementById('roomControls').style.display = 'none';
             gameState.playerNumber = 1;
             gameState.playerId = 'local1';
             playerCount = 2;
             updatePlayerCount();
-            setConnectionStatus('connected', 'Local multiplayer mode');
+            setConnectionStatus('connected', 'Local multiplayer mode - Both players ready!');
+            
+            // Enable the game after a short delay
+            setTimeout(() => {
+                gameState.bothReady = true;
+            }, 500);
         }
 
         function setConnectionStatus(status, message) {
@@ -402,12 +406,41 @@
 
         function createRoom() {
             const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-            joinRoom(roomCode);
+            
+            // Show the generated room code
+            document.getElementById('roomInput').value = roomCode;
+            
+            currentRoom = roomCode;
+            document.getElementById('currentRoom').textContent = roomCode;
+            document.getElementById('roomInfo').style.display = 'block';
+            
+            // Keep room controls visible but disable them
+            const joinBtn = document.querySelector('button[onclick="joinRoom()"]');
+            const createBtn = document.querySelector('button[onclick="createRoom()"]');
+            joinBtn.disabled = true;
+            createBtn.disabled = true;
+            joinBtn.textContent = 'Room Created';
+            
+            gameState.playerNumber = 1;
+            gameState.playerId = 'host';
+            playerCount = 1;
+            updatePlayerCount();
+            setConnectionStatus('waiting', `Room ${roomCode} created! Share this code with a friend.`);
+            
+            // Simulate second player joining after 5 seconds (for demo)
+            setTimeout(() => {
+                if (playerCount === 1) {
+                    playerCount = 2;
+                    updatePlayerCount();
+                    setConnectionStatus('connected', 'Player 2 joined the room!');
+                    enableLocalMultiplayer();
+                }
+            }, 5000);
         }
 
         function joinRoom(roomCode) {
             if (!roomCode) {
-                roomCode = document.getElementById('roomInput').value.toUpperCase();
+                roomCode = document.getElementById('roomInput').value.trim().toUpperCase();
             }
             
             if (!roomCode) {
@@ -418,23 +451,26 @@
             currentRoom = roomCode;
             document.getElementById('currentRoom').textContent = roomCode;
             document.getElementById('roomInfo').style.display = 'block';
-            document.getElementById('roomControls').style.display = 'none';
             
-            // Simulate joining room
-            gameState.playerNumber = 1;
-            gameState.playerId = 'player1';
-            playerCount = 1;
+            // Disable room controls
+            const joinBtn = document.querySelector('button[onclick="joinRoom()"]');
+            const createBtn = document.querySelector('button[onclick="createRoom()"]');
+            const roomInput = document.getElementById('roomInput');
+            joinBtn.disabled = true;
+            createBtn.disabled = true;
+            roomInput.disabled = true;
+            joinBtn.textContent = 'Joining...';
+            
+            gameState.playerNumber = 2;
+            gameState.playerId = 'player2';
+            playerCount = 2;
             updatePlayerCount();
-            setConnectionStatus('waiting', 'Waiting for another player...');
+            setConnectionStatus('connected', `Joined room ${roomCode}!`);
             
-            // Simulate second player joining after 3 seconds
+            // Enable game immediately when joining
             setTimeout(() => {
-                if (playerCount === 1) {
-                    playerCount = 2;
-                    updatePlayerCount();
-                    setConnectionStatus('connected', 'Both players connected!');
-                }
-            }, 3000);
+                enableLocalMultiplayer();
+            }, 1000);
         }
 
         function updatePlayerCount() {
@@ -473,16 +509,28 @@
         });
 
         function readyUp() {
-            if (playerCount < 2) return;
+            if (playerCount < 2) {
+                alert('Waiting for another player to join!');
+                return;
+            }
             
             gameState.ready = !gameState.ready;
             
-            // Simulate both players ready
+            // Update button text based on ready state
+            const gameOverDiv = document.getElementById('gameOver');
+            if (gameOverDiv.style.display !== 'block') {
+                setConnectionStatus('connected', 
+                    gameState.ready ? 'You are ready! Waiting for other player...' : 'Press SPACE when ready to play!'
+                );
+            }
+            
+            // Simulate both players ready for demo
             if (gameState.ready) {
                 setTimeout(() => {
                     gameState.bothReady = true;
+                    setConnectionStatus('connected', 'Both players ready! Game starting...');
                     startGame();
-                }, 1000);
+                }, 1500);
             }
         }
 
