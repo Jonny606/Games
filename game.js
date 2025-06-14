@@ -352,13 +352,11 @@ function createStadium() {
     scene.add(goal);
 
     // Goalkeeper
-    const keeperGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16); // <-- Your fix is perfect!
+    const keeperGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16);
     const keeperMat = new THREE.MeshStandardMaterial({color: 0xff0000, roughness: 0.5});
     keeper = new THREE.Mesh(keeperGeo, keeperMat);
-    
-    // These two lines were missing, now they are back:
-    keeper.position.set(0, 1.8 / 2, 0.5); // Position the keeper correctly
-    scene.add(keeper);                     // Add the keeper to the scene
+    keeper.position.set(0, 1.8 / 2, 0.5);
+    scene.add(keeper);
 }
 
 function startPenaltyGame() {
