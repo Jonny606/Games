@@ -86,17 +86,15 @@
         </div>
 
     </div>
+ <!-- Core Three.js library -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 
-   <!-- Core Three.js library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- GLTFLoader for .glb models -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
-<!-- GLTFLoader is needed for .glb models -->
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
-
-<!-- FBXLoader and fflate.min.js are NOT needed for .glb models and are removed -->
-
-<!-- Load OUR game scripts LAST -->
-<script src="players.js"></script>
-<script src="game.js"></script>
+  <!-- Your game logic (players.js must come before game.js if it defines ALL_PLAYERS) -->
+  <script src="players.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
+
