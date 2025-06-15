@@ -8,6 +8,16 @@ const screens = { loading: document.getElementById('loading-screen'), mainMenu: 
 const PENALTY_STATE = { INACTIVE: 'inactive', AIMING: 'aiming', POWERING: 'powering', SHOT_TAKEN: 'shot_taken', ANIMATING_KEEPER: 'animating_keeper', KEEPER_TURN: 'keeper_turn', END_ROUND: 'end_round' };
 let penalty = { state: PENALTY_STATE.INACTIVE, round: 0, playerScore: 0, opponentScore: 0, shotPower: 0, aim: new THREE.Vector3(), keeperDive: { active: false, start: null, end: null, duration: 0.4 } };
 
+const g = 9.81;
+const rho = 1.2;
+const Cd = 0.25;
+const Cl = 0.28;
+const mass = 0.4;
+const radius = 0.1095;
+const A = Math.PI * radius * radius;
+const magnusConstant = (rho * A * Cl) / (2 * mass);
+const dragConstant = (rho * A * Cd) / (2 * mass);
+
 
 // --- Initialization ---
 function init() {
@@ -266,6 +276,25 @@ function loadCharacters(fbxLoader) {
         scene.add(shooter);
     });
 }
+// --- NEW REALISTIC PHYSICS ---
+function updateBallPhysics(delta) {
+    if (!ball || !ball.velocity || ball.velocity.length() < 0.1) return;
+
+    const v = ball.velocity.length();
+    const Fdrag = ball.velocity.clone().negate().normalize().multiplyScalar(dragConstant * v * v);
+    
+    // Applying spin/magnus force. W.cross(V)
+    // We are using a simplified angular velocity for this example
+    const angularVelocity = new THREE.Vector3(0, -5, -15); // Gives right-to-left curve
+    const FMagnus = angularVelocity.clone().cross(ball.velocity).multiplyScalar(magnusConstant);
+    
+    const acceleration = new THREE.Vector3().add(Fdrag).add(FMagnus);
+    acceleration.y -= g;
+
+    ball.velocity.add(acceleration.clone().multiplyScalar(delta));
+    ball.position.add(ball.velocity.clone().multiplyScalar(delta));
+}
+
 // --- Penalty Game Logic ---
 function startPenaltyGame() {
     penalty.state = PENALTY_STATE.INACTIVE; penalty.round = 1; penalty.playerScore = 0; penalty.opponentScore = 0;
@@ -290,13 +319,12 @@ function shootBall() {
 
     const player = ALL_PLAYERS.find(p => p.id === playerState.penaltyTakers[penalty.round-1]);
     const stats = player.stats;
-    const power = (penalty.shotPower / 100) * 20 + 10;
+    const power = (penalty.shotPower / 100) * 20 + 15;
     const finalPower = power * (1 + (stats.speed - 50) / 50 * 0.3);
     const inaccuracy = 0.5 * (1 - (stats.control - 50) / 50 * 0.9);
     const direction = penalty.aim.clone().sub(ball.position).normalize();
     direction.x += (Math.random() - 0.5) * inaccuracy; direction.y += (Math.random() - 0.5) * inaccuracy;
     ball.velocity = direction.multiplyScalar(finalPower);
-    ball.angularVelocity = new THREE.Vector3(-ball.velocity.z, 0, ball.velocity.x).multiplyScalar(0.1);
     triggerKeeperDive();
 }
 
@@ -306,7 +334,7 @@ function endRound() { penalty.round++; if (penalty.round > 5) { endGame(); } els
 function endGame() { document.querySelector('.shot-controls').classList.remove('visible'); let result = "DRAW!", reward = 500; if (penalty.playerScore > penalty.opponentScore) { result = "YOU WIN!"; reward = 1500; } else if (penalty.playerScore < penalty.opponentScore) { result = "YOU LOSE!"; reward = 250; } playerState.gold += reward; showResultMessage(result, () => { if(shooter) shooter.visible = false; if(keeper) keeper.visible = false; showScreen('mainMenu'); }); savePlayerState(); updateGoldUI(); }
 function checkGoalAndSave(ballPos) { if (ballPos.z < 0.5 && ballPos.y > 0) { const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); if (keeper) { const keeperRect = new THREE.Box3().setFromObject(keeper); if (keeperRect.intersectsBox(ballRect)) return "SAVE!"; } if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) { penalty.playerScore++; return "GOAL!"; } } return null; }
 function showResultMessage(msg, callback) { const el = document.getElementById('result-message'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; if(callback) callback(); }, 2000); }
-function resetBall() { ball.position.set(0, 0.2, 11); if (ball.velocity) ball.velocity.set(0, 0, 0); if (ball.angularVelocity) ball.angularVelocity.set(0, 0, 0); if(shooter) shooter.visible = true; }
+function resetBall() { ball.position.set(0, 0.2, 11); if (ball.velocity) ball.velocity.set(0, 0, 0); if(shooter) shooter.visible = true; }
 function resetKeeper() { if (keeper) { keeper.position.set(0, 0, 0.5); keeper.rotation.set(0, Math.PI, 0); } }
 
 
@@ -316,6 +344,7 @@ function animate() {
     const delta = clock.getDelta();
     
     if (penalty.state === PENALTY_STATE.POWERING) { penalty.shotPower += 150 * delta; if (penalty.shotPower > 100) penalty.shotPower = 100; document.getElementById('power-bar-inner').style.width = `${penalty.shotPower}%`; }
+    
     if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || penalty.state === PENALTY_STATE.SHOT_TAKEN) {
         if (penalty.keeperDive.active && keeper) {
             const elapsedTime = clock.getElapsedTime() - penalty.keeperDive.startTime;
@@ -325,15 +354,18 @@ function animate() {
             keeper.rotation.z = -diveAngle * progress;
             if (progress >= 1) penalty.keeperDive.active = false;
         }
-        if (ball.velocity && ball.velocity.length() > 0.1) {
-            ball.velocity.y -= 9.8 * delta; ball.position.add(ball.velocity.clone().multiplyScalar(delta));
-            ball.rotation.x += ball.angularVelocity.x * delta; ball.rotation.z += ball.angularVelocity.z * delta;
-            if (ball.position.y < 0.2) { ball.position.y = 0.2; ball.velocity.y *= -0.5; }
-            if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER) {
-                const result = checkGoalAndSave(ball.position);
-                if (result) { penalty.state = PENALTY_STATE.END_ROUND; showResultMessage(result, handleKeeperTurn); } 
-                else if (ball.position.z < -2) { penalty.state = PENALTY_STATE.END_ROUND; showResultMessage("MISS!", handleKeeperTurn); }
-            }
+        
+        // --- THIS IS THE BIG CHANGE ---
+        // We now call our new physics function every frame
+        updateBallPhysics(delta);
+
+        // Ground collision (already handled in physics, but a hard limit is good)
+        if (ball.position.y < 0.2) { ball.position.y = 0.2; ball.velocity.y *= -0.5; }
+
+        if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER) {
+            const result = checkGoalAndSave(ball.position);
+            if (result) { penalty.state = PENALTY_STATE.END_ROUND; showResultMessage(result, handleKeeperTurn); } 
+            else if (ball.position.z < -2) { penalty.state = PENALTY_STATE.END_ROUND; showResultMessage("MISS!", handleKeeperTurn); }
         }
     }
     renderer.render(scene, camera);
