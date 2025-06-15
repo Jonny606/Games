@@ -248,7 +248,7 @@ function loadEnvironment(gltfLoader) {
 
 function loadCharacters(gltfLoader) {
     // Load the Goalkeeper model
-    const keeperURL = const keeperURL = 'https://github.com/Jonny606/Games/releases/download/v1.0/Goalkeeper.Diving.Save.glb';
+const keeperURL = 'https://github.com/Jonny606/Games/releases/download/v1.0/Goalkeeper.Diving.Save.glb';
     gltfLoader.load(keeperURL, (gltf) => {
         keeper = gltf.scene;
         keeper.scale.set(0.6, 0.6, 0.6);
