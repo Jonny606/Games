@@ -130,25 +130,30 @@ function loadEnvironment() {
 
 // Pass GLTFLoader to this function instead of FBXLoader
 function loadCharacters(gltfLoader) {
- const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/GoalkeeperDivingSave.glb';
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/SoccerPenaltyKick.glb';
+    // CORRECTED URLs based on GitHub repository structure
+    const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@master/models/GoalkeeperDivingSave.glb';
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@master/models/SoccerPenaltyKick.glb';
 
-    gltfLoader.load(keeperURL, (gltf) => { // Access gltf.scene for GLTF models
+    gltfLoader.load(keeperURL, (gltf) => { 
         keeper = gltf.scene;
         keeper.scale.set(0.008, 0.008, 0.008); 
         keeper.position.set(0, 0, 0.5);
         keeper.rotation.y = Math.PI;
         keeper.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
         scene.add(keeper);
+    }, undefined, function (error) { 
+        console.error('Error loading keeper model:', error);
     });
 
-    gltfLoader.load(shooterURL, (gltf) => { // Access gltf.scene for GLTF models
+    gltfLoader.load(shooterURL, (gltf) => { 
         shooter = gltf.scene;
         shooter.scale.set(0.006, 0.006, 0.006); 
         shooter.position.set(0, 0, 11.5);
         shooter.rotation.y = Math.PI;
         shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
         scene.add(shooter);
+    }, undefined, function (error) { 
+        console.error('Error loading shooter model:', error);
     });
 }
 // --- NEW REALISTIC PHYSICS ---
