@@ -245,29 +245,31 @@ function loadEnvironment(gltfLoader) {
     scene.add(goal);
 }
 
-function loadCharacters(gltfLoader) {
-    // --- Load the Goalkeeper model ---
-    // Your URL here (I've cleaned it up slightly to the standard "raw" format)
-    const keeperURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Goalkeeper%20Diving%20Save.glb';
+function loadCharacters(gltfLoader, scene) {
+  const keeperURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Goalkeeper%20Diving%20Save.glb';
 
-    // Use the loader to download and build the model
-    gltfLoader.load(keeperURL, (gltf) => {
-        // This part runs ONLY after the download is complete
-        keeper = gltf.scene; // "gltf.scene" is the actual 3D model
-        
-        // Now we can position and scale it
-        keeper.scale.set(0.8, 0.8, 0.8);      // You may need to change these values
-        keeper.position.set(0, 0, 0.5);      // You may need to change these values
-        keeper.rotation.y = Math.PI;          // Makes it face forward
+    
+    gltfLoader.load(
+    keeperURL,
+    (gltf) => {
+      const keeper = gltf.scene;
 
-        keeper.traverse(node => { 
-            if (node.isMesh) { node.castShadow = true; } 
-        });
+      keeper.scale.set(0.8, 0.8, 0.8);
+      keeper.position.set(0, 0, 0.5);
+      keeper.rotation.y = Math.PI;
 
-        scene.add(keeper); // Finally, add it to the game world
-    });
+      keeper.traverse((node) => {
+        if (node.isMesh) node.castShadow = true;
+      });
 
-
+      scene.add(keeper);
+    },
+    undefined,
+    (error) => {
+      console.error('Error loading goalkeeper model:', error);
+    }
+  );
+}
     // --- Load the Shooter model (This is your existing correct code) ---
     const shooterURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Soccer%20Penalty%20Kick.glb';
     gltfLoader.load(shooterURL, (gltf) => {
