@@ -246,22 +246,41 @@ function loadEnvironment(gltfLoader) {
 }
 
 function loadCharacters(gltfLoader) {
-    const keeperGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16);
-    const keeperMat = new THREE.MeshStandardMaterial({color: 0x1A5D1A, roughness: 0.8 });
-    keeper = new THREE.Mesh(keeperGeo, keeperMat);
-    keeper.scale.set(0.6, 0.6, 0.6);
-    keeper.position.set(0, 0, 0.5);
-    keeper.rotation.y = Math.PI;
-    keeper.castShadow = true;
-    scene.add(keeper);
+    // --- Load the Goalkeeper model ---
+    // Your URL here (I've cleaned it up slightly to the standard "raw" format)
+    const keeperURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Goalkeeper%20Diving%20Save.glb';
 
+    // Use the loader to download and build the model
+    gltfLoader.load(keeperURL, (gltf) => {
+        // This part runs ONLY after the download is complete
+        keeper = gltf.scene; // "gltf.scene" is the actual 3D model
+        
+        // Now we can position and scale it
+        keeper.scale.set(0.8, 0.8, 0.8);      // You may need to change these values
+        keeper.position.set(0, 0, 0.5);      // You may need to change these values
+        keeper.rotation.y = Math.PI;          // Makes it face forward
+
+        keeper.traverse(node => { 
+            if (node.isMesh) { node.castShadow = true; } 
+        });
+
+        scene.add(keeper); // Finally, add it to the game world
+    });
+
+
+    // --- Load the Shooter model (This is your existing correct code) ---
     const shooterURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Soccer%20Penalty%20Kick.glb';
     gltfLoader.load(shooterURL, (gltf) => {
         shooter = gltf.scene;
-        shooter.scale.set(0.6, 0.6, 0.6);
+        
+        shooter.scale.set(0.6, 0.6, 0.6); // You can adjust this as needed
         shooter.position.set(0, 0, 11.5);
         shooter.rotation.y = Math.PI;
-        shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
+
+        shooter.traverse(node => { 
+            if (node.isMesh) { node.castShadow = true; } 
+        });
+
         scene.add(shooter);
     });
 }
