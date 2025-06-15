@@ -2,8 +2,7 @@
 
 // --- Global State & Constants ---
 let scene, camera, renderer, clock, textureLoader;
-let ball, goal, keeper, shooter; // Using full 3D models now
-let mixer; // For animations later, if any
+let ball, goal, keeper, shooter;
 let playerState = { gold: 5000, myPlayers: [], penaltyTakers: [] };
 const screens = { loading: document.getElementById('loading-screen'), mainMenu: document.getElementById('main-menu'), squad: document.getElementById('squad-screen'), store: document.getElementById('pack-store'), packOpening: document.getElementById('pack-opening-animation'), penaltyUI: document.getElementById('penalty-game-ui'), };
 const PENALTY_STATE = { INACTIVE: 'inactive', AIMING: 'aiming', POWERING: 'powering', SHOT_TAKEN: 'shot_taken', ANIMATING_KEEPER: 'animating_keeper', KEEPER_TURN: 'keeper_turn', END_ROUND: 'end_round' };
@@ -46,6 +45,7 @@ function init() {
 
     loadingManager.onProgress = function(url, itemsLoaded, itemsTotal) {
         loadingDetails.textContent = `Loading asset ${itemsLoaded} of ${itemsTotal}...`;
+        console.log(`Loading file: ${url} (${itemsLoaded}/${itemsTotal})`);
     };
 
     loadingManager.onLoad = function() {
@@ -58,13 +58,13 @@ function init() {
 
     loadingManager.onError = function(url) {
         console.error('There was an error loading ' + url);
-        loadingDetails.textContent = 'Error loading assets. Please refresh.';
+        loadingDetails.textContent = `Error loading: ${url}. Please refresh.`;
     };
 
-    const gltfLoader = new THREE.GLTFLoader(loadingManager);
+    const fbxLoader = new THREE.FBXLoader(loadingManager);
     
-    loadEnvironment(gltfLoader);
-    loadCharacters(gltfLoader);
+    loadEnvironment();
+    loadCharacters(fbxLoader);
 
     setupEventListeners();
     animate();
@@ -215,7 +215,7 @@ function runPackAnimation(player) {
     setTimeout(() => { continueBtn.style.display = 'block'; }, 3500); 
 }
 // --- 3D Model Loading Section ---
-function loadEnvironment(gltfLoader) {
+function loadEnvironment() {
     const grassColorMap = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg');
     grassColorMap.wrapS = THREE.RepeatWrapping; grassColorMap.wrapT = THREE.RepeatWrapping; grassColorMap.repeat.set(25, 25);
     const grassMaterial = new THREE.MeshStandardMaterial({ map: grassColorMap, roughness: 0.7, metalness: 0.1 });
@@ -229,7 +229,6 @@ function loadEnvironment(gltfLoader) {
     ball.castShadow = true; ball.position.set(0, 0.2, 11);
     scene.add(ball);
 
-    // Using a simple shape for the goal for stability
     goal = new THREE.Group();
     const postMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.1, metalness: 0.9 });
     const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.44, 16);
@@ -246,25 +245,21 @@ function loadEnvironment(gltfLoader) {
     scene.add(goal);
 }
 
-function loadCharacters(gltfLoader) {
-    // These new URLs use jsDelivr to serve your GitHub files with the correct permissions.
-   const keeperURL = 'https://github.com/Jonny606/Games/releases/download/v2.0/Goalkeeper.Diving.Save.glb';
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
-
-    // Load the Goalkeeper model
-    gltfLoader.load(keeperURL, (gltf) => {
-        keeper = gltf.scene;
-        keeper.scale.set(0.8, 0.8, 0.8);
+function loadCharacters(fbxLoader) {
+    const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Goalkeeper%20Diving%20Save.glb';
+    fbxLoader.load(keeperURL, (object) => {
+        keeper = object;
+        keeper.scale.set(0.008, 0.008, 0.008);
         keeper.position.set(0, 0, 0.5);
         keeper.rotation.y = Math.PI;
         keeper.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
         scene.add(keeper);
     });
 
-    // Load the Shooter model
-    gltfLoader.load(shooterURL, (gltf) => {
-        shooter = gltf.scene;
-        shooter.scale.set(0.6, 0.6, 0.6);
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
+    fbxLoader.load(shooterURL, (object) => {
+        shooter = object;
+        shooter.scale.set(0.006, 0.006, 0.006);
         shooter.position.set(0, 0, 11.5);
         shooter.rotation.y = Math.PI;
         shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
