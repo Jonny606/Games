@@ -227,20 +227,44 @@ function createEnvironment() {
     scene.add(goal);
 }
 
-function createCharacters() {
-    const keeperGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.9, 16);
-    const keeperMat = new THREE.MeshStandardMaterial({color: 0x1A5D1A, roughness: 0.8 });
-    keeper = new THREE.Mesh(keeperGeo, keeperMat);
-    keeper.position.set(0, 1.9/2, 0.5);
-    keeper.castShadow = true;
-    scene.add(keeper);
+function loadCharacters(gltfLoader) {
+    // --- Load the Goalkeeper model ---
+    // Your URL here (I've cleaned it up slightly to the standard "raw" format)
+    const keeperURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Goalkeeper%20Diving%20Save.glb';
 
-    const shooterGeo = new THREE.CylinderGeometry(0.35, 0.35, 1.8, 16);
-    const shooterMat = new THREE.MeshStandardMaterial({color: 0xdb2a34, roughness: 0.8});
-    shooter = new THREE.Mesh(shooterGeo, shooterMat);
-    shooter.position.set(0, 1.8/2, 11.5);
-    shooter.castShadow = true;
-    scene.add(shooter);
+    // Use the loader to download and build the model
+    gltfLoader.load(keeperURL, (gltf) => {
+        // This part runs ONLY after the download is complete
+        keeper = gltf.scene; // "gltf.scene" is the actual 3D model
+        
+        // Now we can position and scale it
+        keeper.scale.set(0.8, 0.8, 0.8);      // You may need to change these values
+        keeper.position.set(0, 0, 0.5);      // You may need to change these values
+        keeper.rotation.y = Math.PI;          // Makes it face forward
+
+        keeper.traverse(node => { 
+            if (node.isMesh) { node.castShadow = true; } 
+        });
+
+        scene.add(keeper); // Finally, add it to the game world
+    });
+
+
+    // --- Load the Shooter model (This is your existing correct code) ---
+    const shooterURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Soccer%20Penalty%20Kick.glb';
+    gltfLoader.load(shooterURL, (gltf) => {
+        shooter = gltf.scene;
+        
+        shooter.scale.set(0.6, 0.6, 0.6); // You can adjust this as needed
+        shooter.position.set(0, 0, 11.5);
+        shooter.rotation.y = Math.PI;
+
+        shooter.traverse(node => { 
+            if (node.isMesh) { node.castShadow = true; } 
+        });
+
+        scene.add(shooter);
+    });
 }
 // --- Penalty Game Logic ---
 function startPenaltyGame() {
