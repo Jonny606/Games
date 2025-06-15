@@ -130,8 +130,8 @@ function loadEnvironment() {
 
 // Pass GLTFLoader to this function instead of FBXLoader
 function loadCharacters(gltfLoader) {
-    const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Goalkeeper%20Diving%20Save.glb';
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
+ const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/GoalkeeperDivingSave.glb';
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/SoccerPenaltyKick.glb';
 
     gltfLoader.load(keeperURL, (gltf) => { // Access gltf.scene for GLTF models
         keeper = gltf.scene;
