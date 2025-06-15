@@ -90,11 +90,10 @@
    <!-- Core Three.js library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-<!-- Load ALL tools/loaders FIRST -->
+<!-- GLTFLoader is needed for .glb models -->
 <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
-<!-- Helper library required for FBXLoader -->
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/libs/fflate.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/FBXLoader.js"></script>
+
+<!-- FBXLoader and fflate.min.js are NOT needed for .glb models and are removed -->
 
 <!-- Load OUR game scripts LAST -->
 <script src="players.js"></script>
