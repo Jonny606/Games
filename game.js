@@ -3,10 +3,18 @@
 // --- Global State & Constants ---
 let scene, camera, renderer, clock, textureLoader;
 let ball, goal, keeper, shooter; // 'keeper' will now be a THREE.Mesh (plane) for the 2D sprite
+
+let keeperAnimationTextures = []; // NEW: Array to hold loaded goalkeeper sprite textures for animation
+let currentKeeperFrame = 0; // NEW: To track current animation frame index
+let lastFrameTime = 0; // NEW: To control frame rate of sprite animation
+const KEEPER_FRAME_RATE = 20; // NEW: Frames per second for goalkeeper animation (tune as needed, typical for game sprites)
+const KEEPER_IDLE_SPRITE_URL = 'https://abinbins.github.io/a/penalty-kick-online/sprites/striker/goalkeeper/gk_idle/gk_idle_0_0.png'; // New: Path to the idle sprite
+let keeperIdleTexture; // New: Holds the loaded idle texture
+
 let playerState = { gold: 5000, myPlayers: [], penaltyTakers: [] };
 const screens = { loading: document.getElementById('loading-screen'), mainMenu: document.getElementById('main-menu'), squad: document.getElementById('squad-screen'), store: document.getElementById('pack-store'), packOpening: document.getElementById('pack-opening-animation'), penaltyUI: document.getElementById('penalty-game-ui'), };
 const PENALTY_STATE = { INACTIVE: 'inactive', AIMING: 'aiming', POWERING: 'powering', SHOT_TAKEN: 'shot_taken', ANIMATING_KEEPER: 'animating_keeper', KEEPER_TURN: 'keeper_turn', END_ROUND: 'end_round' };
-let penalty = { state: PENALTY_STATE.INACTIVE, round: 0, playerScore: 0, opponentScore: 0, shotPower: 0, aim: new THREE.Vector3(), keeperDive: { active: false, start: null, end: null, duration: 0.4 } };
+let penalty = { state: PENALTY_STATE.INACTIVE, round: 0, playerScore: 0, opponentScore: 0, shotPower: 0, aim: new THREE.Vector3(), keeperDive: { active: false, start: null, end: null, duration: 0.4 } }; // Keeper dive duration affects movement, frame rate affects visual animation speed.
 
 // --- Realistic Physics Constants ---
 const g = 9.81;
@@ -91,7 +99,7 @@ function init() {
     animate();
 }
 
-// --- UI and Event Listener Functions (Minimal changes, mostly moved from game.js and HTML) ---
+// --- UI and Event Listener Functions ---
 function showScreen(screenName) { Object.values(screens).forEach(s => s.classList.remove('active')); if (screens[screenName]) { screens[screenName].classList.add('active'); } }
 function savePlayerState() { localStorage.setItem('soccerGameState', JSON.stringify(playerState)); }
 function loadPlayerState() { const savedState = localStorage.getItem('soccerGameState'); if (savedState) { playerState = JSON.parse(savedState); } else { playerState.myPlayers = [1, 3, 6, 9, 21]; /* Default starting players */ } }
@@ -103,97 +111,115 @@ function createPlayerCard(player, context = 'default') { const card = document.c
 function setupEventListeners() { document.getElementById('play-btn').addEventListener('click', () => { if (playerState.penaltyTakers.length !== 5) { alert('Please select 5 players for your squad before playing!'); return; } showScreen('penaltyUI'); startPenaltyGame(); }); document.getElementById('squad-btn').addEventListener('click', () => { renderSquad(); showScreen('squad'); }); document.getElementById('packs-btn').addEventListener('click', () => showScreen('store')); document.querySelectorAll('.back-btn').forEach(btn => { btn.addEventListener('click', () => { penalty.state = PENALTY_STATE.INACTIVE; showScreen(btn.dataset.target); }); }); document.getElementById('buy-pack-btn').addEventListener('click', buyPack); document.getElementById('pack-continue-btn').addEventListener('click', () => showScreen('store')); window.addEventListener('mousemove', onMouseMove, false); window.addEventListener('mousedown', onMouseDown, false); window.addEventListener('mouseup', onMouseUp, false); }
 function buyPack() { const cost = 1000; if (playerState.gold >= cost) { playerState.gold -= cost; updateGoldUI(); savePlayerState(); showScreen('packOpening'); openPack(); } else { alert("Not enough gold!"); } }
 function openPack() { const weights = ALL_PLAYERS.map(p => { if (p.rating >= 90) return 1; if (p.rating >= 87) return 5; if (p.rating >= 84) return 20; return 74; }); const totalWeight = weights.reduce((a, b) => a + b, 0); let random = Math.random() * totalWeight; let playerToReveal; for (let i = 0; i < ALL_PLAYERS.length; i++) { random -= weights[i]; if (random <= 0) { playerToReveal = ALL_PLAYERS[i]; break; } } if (!playerState.myPlayers.includes(playerToReveal.id)) { playerState.myPlayers.push(playerToReveal.id); } else { playerState.gold += Math.floor(playerToReveal.rating * 5); updateGoldUI(); } savePlayerState(); runPackAnimation(playerToReveal); }
-function runPackAnimation(player) { const flagEl = document.getElementById('reveal-flag'), posEl = document.getElementById('reveal-position'), cardContainer = document.getElementById('reveal-card-container'), continueBtn = document.getElementById('pack-continue-btn'); flagEl.style.opacity = 0; posEl.style.opacity = 0; cardContainer.innerHTML = ''; continueBtn.style.display = 'none'; const oldFlare = document.querySelector('.walkout-flare'); if (oldFlare) oldFlare.remove(); setTimeout(() => { flagEl.style.backgroundImage = `url(https://flagcdn.com/h120/${player.nation}.png)`; flagEl.style.opacity = 1; flagEl.style.transform = 'scale(1)'; }, 500); setTimeout(() => { posEl.textContent = player.position; posEl.style.opacity = 1; posEl.style.transform = 'scale(1)'; }, 1500); setTimeout(() => { const card = createPlayerCard(player); cardContainer.appendChild(card); if (player.rating >= 86) { const flare = document.createElement('div'); flare.className = 'walkout-flare'; cardContainer.appendChild(flare); } }, 2500); setTimeout(() => { continueBtn.style.display = 'block'; }, 3500); }
+function runPackAnimation(player) { const flagEl = document.getElementById('reveal-flag'), posEl = document.getElementById('reveal-position'), cardContainer = document.getElementById('reveal-card-container'), continueBtn = document.getElementById('pack-continue-btn'); flagEl.style.opacity = 0; posEl.style.opacity = 0; cardContainer.innerHTML = ''; continueBtn.style.display = 'none'; const oldFlare = document.querySelector('.walkout-flare'); if (oldFlare) oldFlare.remove(); setTimeout(() => { flagEl.style.backgroundImage = `url(https://flagcdn.com/h120/${player.nation}.png)`; flagEl.style.opacity = 1; flag.style.transform = 'scale(1)'; }, 500); setTimeout(() => { posEl.textContent = player.position; posEl.style.opacity = 1; posEl.style.transform = 'scale(1)'; }, 1500); setTimeout(() => { const card = createPlayerCard(player); cardContainer.appendChild(card); if (player.rating >= 86) { const flare = document.createElement('div'); flare.className = 'walkout-flare'; cardContainer.appendChild(flare); } }, 2500); setTimeout(() => { continueBtn.style.display = 'block'; }, 3500); }
 
-// --- 3D Model and Environment Loading Section ---
+// --- 3D Environment Loading ---
 function loadEnvironment() {
     // Ground plane with grass texture
     const grassColorMap = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg');
     grassColorMap.wrapS = THREE.RepeatWrapping; grassColorMap.wrapT = THREE.RepeatWrapping; grassColorMap.repeat.set(25, 25);
     const grassMaterial = new THREE.MeshStandardMaterial({ map: grassColorMap, roughness: 0.7, metalness: 0.1 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), grassMaterial);
-    ground.rotation.x = -Math.PI / 2; // Rotate to lie flat
-    ground.receiveShadow = true; // Allows ground to receive shadows
+    ground.rotation.x = -Math.PI / 2; 
+    ground.receiveShadow = true; 
     scene.add(ground);
 
     // Ball creation
     const ballGeometry = new THREE.SphereGeometry(0.2, 32, 32);
     const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.1 });
     ball = new THREE.Mesh(ballGeometry, ballMaterial);
-    ball.castShadow = true; // Ball casts shadows
-    ball.position.set(0, 0.2, 11); // Initial position
-    ball.velocity = new THREE.Vector3(); // Initialize linear velocity for physics
-    ball.angularVelocity = new THREE.Vector3(); // Initialize angular velocity for physics (spin)
+    ball.castShadow = true; 
+    ball.position.set(0, 0.2, 11); 
+    ball.velocity = new THREE.Vector3(); 
+    ball.angularVelocity = new THREE.Vector3(); 
     scene.add(ball);
 
-    // Goal creation (composed of simple geometries)
+    // Goal creation
     goal = new THREE.Group();
     const postMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.1, metalness: 0.9 });
-    const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.44, 16); // Standard goal post height
+    const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.44, 16); 
     const leftPost = new THREE.Mesh(postGeo, postMaterial);
-    leftPost.position.set(-3.66, 2.44 / 2, 0); // Left post position (standard goal width is 7.32m)
+    leftPost.position.set(-3.66, 2.44 / 2, 0); 
     const rightPost = new THREE.Mesh(postGeo, postMaterial);
-    rightPost.position.set(3.66, 2.44 / 2, 0); // Right post position
-    const crossbarGeo = new THREE.CylinderGeometry(0.1, 0.1, 7.32, 16); // Standard crossbar length
+    rightPost.position.set(3.66, 2.44 / 2, 0); 
+    const crossbarGeo = new THREE.CylinderGeometry(0.1, 0.1, 7.32, 16); 
     const crossbar = new THREE.Mesh(crossbarGeo, postMaterial);
-    crossbar.rotation.z = Math.PI/2; // Rotate crossbar to be horizontal
-    crossbar.position.y = 2.44; // Position at the top of the posts
+    crossbar.rotation.z = Math.PI/2; 
+    crossbar.position.y = 2.44; 
     goal.add(leftPost, rightPost, crossbar);
-    goal.traverse(node => { if (node.isMesh) { node.castShadow = true; } }); // Make goal posts cast shadows
+    goal.traverse(node => { if (node.isMesh) { node.castShadow = true; } }); 
     scene.add(goal);
 }
 
-// Loads 3D shooter model and 2D sprite for keeper
+// --- Character Loading: 3D Shooter and 2D Animated Keeper ---
 function loadCharacters(gltfLoader) {
-    // 3D SHOOTER MODEL (remains loaded via GLTF Loader from previous versions)
-    // Corrected URL using '@master' branch and 'models' subfolder
+    // 3D SHOOTER MODEL loading
     const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@master/models/SoccerPenaltyKick.glb';
 
     gltfLoader.load(shooterURL, (gltf) => { 
         shooter = gltf.scene;
-        // Adjust scale for Shooter model to fit the scene well
         shooter.scale.set(0.006, 0.006, 0.006); 
-        shooter.position.set(0, 0, 11.5); // Position the shooter far from the goal (closer to the ball initially)
-        shooter.rotation.y = Math.PI; // Rotate to face the goal
-        shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } }); // Shooter casts shadows
+        shooter.position.set(0, 0, 11.5);
+        shooter.rotation.y = Math.PI;
+        shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
         scene.add(shooter);
     }, undefined, function (error) { 
-        console.error('Error loading shooter model:', error); // Log loading errors for the shooter
+        console.error('Error loading shooter model:', error);
     });
 
-    // 2D GOALKEEPER SPRITE (Replaces the 3D keeper model with a static PNG)
-    const keeperSpriteURL = 'https://abinbins.github.io/a/penalty-kick-online/sprites/striker/goalkeeper/gk_save_up_right/gk_save_up_right_0_17.png';
+    // 2D GOALKEEPER SPRITE ANIMATION SEQUENCE loading
+    // Array to hold the Promises for all animation frame texture loads
+    const keeperTexturePromises = [];
+    // Base path for the dive animation frames
+    const baseSpritePath = 'https://abinbins.github.io/a/penalty-kick-online/sprites/striker/goalkeeper/gk_save_up_right/gk_save_up_right_0_';
+    const numFrames = 18; // From _0_0.png to _0_17.png is 18 frames (0-indexed)
+
+    // Load all textures for the dive animation sequence
+    for (let i = 0; i < numFrames; i++) {
+        const frameUrl = `${baseSpritePath}${i}.png`;
+        keeperTexturePromises.push(
+            new Promise((resolve, reject) => {
+                textureLoader.load(frameUrl, resolve, undefined, reject); // textureLoader is tied to loadingManager
+            })
+        );
+    }
+
+    // Load the separate idle sprite
+    const idleTexturePromise = new Promise((resolve, reject) => {
+        textureLoader.load(KEEPER_IDLE_SPRITE_URL, resolve, undefined, reject);
+    });
     
-    // Load the sprite texture using the initialized textureLoader
-    textureLoader.load(keeperSpriteURL, function(texture) {
-        // Define desired real-world height for the sprite
-        const spriteHeight = 1.8; // Example: 1.8 meters tall
-        // Calculate width to maintain original image's aspect ratio
-        const spriteWidth = spriteHeight * (texture.image.width / texture.image.height); 
+    // Wait for all keeper textures (animation + idle) to load
+    Promise.all([...keeperTexturePromises, idleTexturePromise])
+        .then(results => {
+            keeperAnimationTextures = results.slice(0, numFrames); // First `numFrames` results are the animation
+            keeperIdleTexture = results[numFrames]; // The last result is the idle texture
 
-        // Create a flat plane geometry
-        const keeperGeometry = new THREE.PlaneGeometry(spriteWidth, spriteHeight); 
-        // Create a basic material for 2D sprites. It doesn't react to lights complexly.
-        const keeperMaterial = new THREE.MeshBasicMaterial({ 
-            map: texture,          // Apply the loaded image as a texture
-            transparent: true,     // Essential for PNGs with transparency
-            alphaTest: 0.5,        // Improves rendering of transparent areas (tunes cutoff)
-            side: THREE.DoubleSide // Makes the sprite visible from both front and back
+            // Use the first animation frame or the idle frame to set up the initial keeper object
+            const initialTexture = keeperIdleTexture; // Start with idle texture
+            const spriteHeight = 1.8; 
+            const spriteWidth = spriteHeight * (initialTexture.image.width / initialTexture.image.height); 
+
+            const keeperGeometry = new THREE.PlaneGeometry(spriteWidth, spriteHeight);
+            const keeperMaterial = new THREE.MeshBasicMaterial({ 
+                map: initialTexture, 
+                transparent: true, 
+                alphaTest: 0.5, 
+                side: THREE.DoubleSide
+            });
+
+            keeper = new THREE.Mesh(keeperGeometry, keeperMaterial);
+            keeper.position.set(0, spriteHeight / 2, 0.5); 
+            keeper.rotation.y = Math.PI; 
+            keeper.castShadow = false; 
+            scene.add(keeper);
+
+            console.log('All goalkeeper sprites (animation and idle) loaded successfully!');
+        })
+        .catch(error => {
+            console.error('Error loading one or more keeper sprite frames/idle:', error);
+            // This error is also propagated by the loadingManager since textureLoader uses it.
         });
-
-        // Create the Mesh for the keeper
-        keeper = new THREE.Mesh(keeperGeometry, keeperMaterial);
-        // Position the keeper (sprite's center): X=0, Y=half its height (to stand on ground), Z slightly in front of goal line
-        keeper.position.set(0, spriteHeight / 2, 0.5); 
-        keeper.rotation.y = Math.PI; // Rotate the plane to face the camera/ball (player)
-        keeper.castShadow = false; // 2D sprites typically don't cast realistic shadows in 3D without special setup
-        scene.add(keeper);
-
-        console.log('2D Goalkeeper sprite loaded successfully!');
-
-    }, undefined, function(error) {
-        console.error('Error loading keeper sprite:', error); // Log loading errors for the sprite
-    });
 }
 
 // --- Realistic Physics Simulation ---
@@ -201,59 +227,51 @@ function updateBallPhysics(delta) {
     if (!ball || !ball.velocity) {
         return;
     }
-
     const v = ball.velocity.length();
-
-    // If ball is moving too slowly, stop it and its spin completely.
-    if (v < 0.1 && ball.position.y <= 0.21) { // Only stop if on or very near ground
+    if (v < 0.1 && ball.position.y <= 0.21) { 
         ball.velocity.set(0, 0, 0);
         ball.angularVelocity.set(0, 0, 0);
-        ball.rotation.set(0,0,0); // Reset visual rotation for simplicity when stopped
+        ball.rotation.set(0,0,0);
         return;
     }
-
-    // Calculate Drag Force: F_drag = -dragConstant * v^2 * unit_vector_v
     const Fdrag = ball.velocity.clone().negate().normalize().multiplyScalar(dragConstant * v * v);
-    
-    // Calculate Magnus Force: F_magnus = magnusConstant * (W x V)
-    // W is angular velocity (ball.angularVelocity), V is linear velocity (ball.velocity)
     const FMagnus = ball.angularVelocity.clone().cross(ball.velocity).multiplyScalar(magnusConstant);
-    
-    // Total acceleration = (F_drag + F_magnus) / mass + Gravity
     const acceleration = new THREE.Vector3().add(Fdrag).add(FMagnus);
-    acceleration.y -= g; // Add gravity (always pulling down)
-
-    // Update velocity and position using simple Euler integration
+    acceleration.y -= g;
     ball.velocity.add(acceleration.clone().multiplyScalar(delta));
     ball.position.add(ball.velocity.clone().multiplyScalar(delta));
 }
 
-
 // --- Penalty Game Logic ---
 function startPenaltyGame() {
-    // Reset game state for a new match
     penalty.state = PENALTY_STATE.INACTIVE; 
     penalty.round = 1; 
     penalty.playerScore = 0; 
     penalty.opponentScore = 0;
     
-    // Ensure character visibility
     if (shooter) shooter.visible = true;
-    if (keeper) keeper.visible = true;
+    if (keeper) keeper.visible = true; // Keeper visible at start of game
     
-    resetBall();    // Reset ball position and velocity
-    resetKeeper();  // Reset keeper position
-    updatePenaltyHUD(); // Update score display
+    resetBall();    
+    resetKeeper();  
+    updatePenaltyHUD(); 
 
-    document.querySelector('.shot-controls').classList.add('visible'); // Show UI controls
-    setTimeout(() => { setupPlayerTurn(); }, 1000); // Start player turn after a short delay
+    document.querySelector('.shot-controls').classList.add('visible');
+    setTimeout(() => { setupPlayerTurn(); }, 1000); 
 }
 
 function setupPlayerTurn() { 
     penalty.state = PENALTY_STATE.AIMING; 
     document.getElementById('aim-reticle').classList.add('visible'); 
-    camera.position.set(0, 1.5, 14); // Position camera for aiming view
-    camera.lookAt(ball.position); // Look at the ball
+    camera.position.set(0, 1.5, 14); 
+    camera.lookAt(ball.position); 
+    
+    // Ensure keeper is visible and set to IDLE sprite for new turn
+    if (keeper && keeperIdleTexture) { // Make sure idle texture is loaded
+        keeper.visible = true;
+        keeper.material.map = keeperIdleTexture; // Set to idle sprite
+        currentKeeperFrame = 0; // Reset animation frame counter
+    }
 }
 
 function updatePenaltyHUD() { 
@@ -263,23 +281,20 @@ function updatePenaltyHUD() {
 }
 
 function onMouseMove(event) { 
-    if (penalty.state !== PENALTY_STATE.AIMING) return; // Only allow aiming when in AIMING state
+    if (penalty.state !== PENALTY_STATE.AIMING) return; 
     
     const mouse = new THREE.Vector2(); 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; 
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1; 
     
-    // Define a plane at the goal line (or slightly in front) to project mouse onto
-    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Plane at Z=0
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); 
     const raycaster = new THREE.Raycaster(); 
     raycaster.setFromCamera(mouse, camera); 
-    raycaster.ray.intersectPlane(plane, penalty.aim); // Calculate intersection point on the plane
+    raycaster.ray.intersectPlane(plane, penalty.aim); 
     
-    // Clamp aim position within realistic goal bounds
-    penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.5, 3.5); // Between goal posts
-    penalty.aim.y = THREE.MathUtils.clamp(penalty.aim.y, 0.1, 2.3); // Between ground and crossbar (approximate)
+    penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.5, 3.5); 
+    penalty.aim.y = THREE.MathUtils.clamp(penalty.aim.y, 0.1, 2.3); 
 
-    // Update the on-screen aim reticle position
     const screenPos = penalty.aim.clone().project(camera); 
     const reticle = document.getElementById('aim-reticle'); 
     reticle.style.left = `${(screenPos.x + 1) / 2 * window.innerWidth}px`; 
@@ -288,106 +303,92 @@ function onMouseMove(event) {
 
 function onMouseDown(event) { 
     if (penalty.state === PENALTY_STATE.AIMING) { 
-        penalty.state = PENALTY_STATE.POWERING; // Transition to powering state
-        penalty.shotPower = 0; // Start power bar at zero
+        penalty.state = PENALTY_STATE.POWERING; 
+        penalty.shotPower = 0; 
     } 
 }
 
 function onMouseUp(event) { 
     if (penalty.state === PENALTY_STATE.POWERING) { 
-        shootBall(); // Shoot the ball when mouse is released in powering state
+        shootBall(); 
     } 
 }
 
 function shootBall() {
     penalty.state = PENALTY_STATE.SHOT_TAKEN;
-    document.getElementById('aim-reticle').classList.remove('visible'); // Hide aim reticle
-    if (shooter) shooter.visible = false; // Hide the static shooter model after kick
+    document.getElementById('aim-reticle').classList.remove('visible'); 
+    if (shooter) shooter.visible = false; 
 
-    // Get current player's stats for influence on shot
     const player = ALL_PLAYERS.find(p => p.id === playerState.penaltyTakers[penalty.round-1]);
-    // Defensive access to stats, defaulting if undefined to prevent errors
     const stats = player ? player.stats : { speed: 50, control: 50, curve: 50 }; 
     
-    // Calculate base power from power bar percentage
-    const basePower = (penalty.shotPower / 100) * 20 + 15; // Power range from 15 to 35 m/s
-    // Apply speed stat influence on final power
-    const finalPower = basePower * (1 + (stats.speed - 50) / 50 * 0.3); // +/- 30% from base speed based on stat
-    // Apply control stat influence on inaccuracy
-    const inaccuracy = 0.5 * (1 - (stats.control - 50) / 50 * 0.9); // More control = less inaccuracy
+    const basePower = (penalty.shotPower / 100) * 20 + 15; 
+    const finalPower = basePower * (1 + (stats.speed - 50) / 50 * 0.3); 
+    const inaccuracy = 0.5 * (1 - (stats.control - 50) / 50 * 0.9); 
 
-    // Determine initial shot direction based on aim and inaccuracy
     const direction = penalty.aim.clone().sub(ball.position).normalize();
     direction.x += (Math.random() - 0.5) * inaccuracy; 
     direction.y += (Math.random() - 0.5) * inaccuracy;
-    ball.velocity.copy(direction.multiplyScalar(finalPower)); // Set ball's initial velocity
+    ball.velocity.copy(direction.multiplyScalar(finalPower)); 
 
-    // Calculate ball's angular velocity (spin) for realistic Magnus effect and visual rotation
-    const curveStat = stats.curve; // Player's curve stat directly influences sidespin
+    const curveStat = stats.curve; 
+    let spinY = 0; 
+    let spinZ = 0; 
 
-    let spinY = 0; // Side spin (for horizontal curve, positive for left curve, negative for right curve in Three.js coordinates)
-    let spinZ = 0; // Forward/Back spin (primarily visual rotation and subtle vertical effect from Magnus)
-
-    // Normalize aim X position relative to goal width (approx. -1 to 1 across goal)
     const aimXNormalized = THREE.MathUtils.clamp(penalty.aim.x, -3.66, 3.66) / 3.66; 
 
-    const baseSideSpinMagnitude = 80; // Max radians per second for side spin (tune this value as needed)
-    // Formula to apply spin based on horizontal aim: Aiming right (+X) results in negative spinY for right curve (Magnus force towards +X if vel is -Z, spin is -Y).
+    const baseSideSpinMagnitude = 80; 
     spinY = -aimXNormalized * baseSideSpinMagnitude * (curveStat / 100); 
 
-    // Apply some forward roll (Z-axis spin) scaled by shot power, making the ball visibly spin forward
-    const baseForwardRollMagnitude = 50; // Max radians per second for forward roll
-    spinZ = (finalPower / 35) * baseForwardRollMagnitude; // Scales from 0 to baseForwardRollMagnitude
+    const baseForwardRollMagnitude = 50; 
+    spinZ = (finalPower / 35) * baseForwardRollMagnitude; 
 
-    // Set the ball's angular velocity
-    ball.angularVelocity.set(0, spinY, spinZ); // X-spin (back/top spin for vertical curve) set to 0 for simplicity
-
-    // Clamp total angular velocity magnitude to prevent extreme unrealistic spin
-    const maxTotalSpin = 120; // Maximum realistic total angular velocity for a kick (rad/s)
+    ball.angularVelocity.set(0, spinY, spinZ); 
+    const maxTotalSpin = 120; 
     ball.angularVelocity.clampLength(0, maxTotalSpin);
 
-    triggerKeeperDive(); // Start the goalkeeper's dive animation
+    triggerKeeperDive(); 
 }
 
 function triggerKeeperDive() { 
-    // Randomly decide where keeper will dive (biased to corners)
     const random = Math.random(); 
     let diveTargetX = 0; 
-    if (random < 0.45) { diveTargetX = -2.5; } // Dive left
-    else if (random < 0.90) { diveTargetX = 2.5; } // Dive right
-    // 10% chance to stay in center (if random >= 0.90)
+    if (random < 0.45) { diveTargetX = -2.5; } 
+    else if (random < 0.90) { diveTargetX = 2.5; } 
 
     if(keeper) { 
-        penalty.keeperDive.start = keeper.position.clone(); // Start position
-        penalty.keeperDive.end = new THREE.Vector3(diveTargetX, keeper.position.y, keeper.position.z); // End position
-        // The Y coordinate will be handled during lerp for diving height, not set here in end vector's Y.
+        penalty.keeperDive.start = keeper.position.clone(); 
+        penalty.keeperDive.end = new THREE.Vector3(diveTargetX, keeper.position.y, keeper.position.z);
         penalty.keeperDive.startTime = clock.getElapsedTime(); 
-        penalty.keeperDive.active = true; // Activate dive animation
+        penalty.keeperDive.active = true; 
+        
+        // Reset keeper animation state and ensure it begins from first frame of dive
+        currentKeeperFrame = 0; 
+        lastFrameTime = 0; // Reset last frame time for animation
     } 
-    penalty.state = PENALTY_STATE.ANIMATING_KEEPER; // Transition to keeper animation state
+    penalty.state = PENALTY_STATE.ANIMATING_KEEPER; 
 }
 
 function handleKeeperTurn() { 
-    penalty.state = PENALTY_STATE.KEEPER_TURN; // Set game state for opponent's turn
-    updatePenaltyHUD(); // Update display to show opponent's turn
-    // Simulate opponent's shot result
+    penalty.state = PENALTY_STATE.KEEPER_TURN; 
+    updatePenaltyHUD(); 
     setTimeout(() => { 
-        const goalScored = Math.random() < 0.7; // 70% chance opponent scores
+        const goalScored = Math.random() < 0.7; 
         if (goalScored) { 
             penalty.opponentScore++; 
             showResultMessage("THEY SCORE", endRound); 
         } else { 
             showResultMessage("THEY MISS!", endRound); 
         } 
-    }, 1500); // Display result after 1.5 seconds
+    }, 1500); 
 }
 
 function endRound() { 
-    penalty.round++; // Increment round number
+    penalty.round++; 
     if (penalty.round > 5) { 
-        endGame(); // End game after 5 rounds
+        endGame(); 
     } else { 
-        setupPlayerTurn(); // Otherwise, set up next player turn
+        setupPlayerTurn(); 
         updatePenaltyHUD(); 
         resetBall(); 
         resetKeeper(); 
@@ -395,143 +396,170 @@ function endRound() {
 }
 
 function endGame() { 
-    document.querySelector('.shot-controls').classList.remove('visible'); // Hide UI controls
-    let result = "DRAW!", reward = 500; // Default to draw
+    document.querySelector('.shot-controls').classList.remove('visible'); 
+    let result = "DRAW!", reward = 500; 
     if (penalty.playerScore > penalty.opponentScore) { 
-        result = "YOU WIN!"; reward = 1500; // Win bonus
+        result = "YOU WIN!"; reward = 1500; 
     } else if (penalty.playerScore < penalty.opponentScore) { 
-        result = "YOU LOSE!"; reward = 250; // Loss penalty/consolation
+        result = "YOU LOSE!"; reward = 250; 
     } 
-    playerState.gold += reward; // Award gold
+    playerState.gold += reward; 
     showResultMessage(result, () => { 
         if(shooter) shooter.visible = false; 
-        if(keeper) keeper.visible = false; 
-        showScreen('mainMenu'); // Return to main menu after game ends
+        if(keeper) keeper.visible = false; // Hide keeper after game ends
+        showScreen('mainMenu'); 
     }); 
     savePlayerState(); 
     updateGoldUI(); 
 }
 
 function checkGoalAndSave(ballPos) { 
-    // Check if ball is behind the goal line and above ground
     if (ballPos.z < 0.5 && ballPos.y > 0) { 
-        // Create simple bounding boxes for collision detection
-        const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); // Ball is 0.4m diameter (radius 0.2*2)
+        const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); 
         if (keeper) { 
-            const keeperRect = new THREE.Box3().setFromObject(keeper); // Get bounding box of the keeper object
-            // Adjust keeperRect size slightly for 2D sprite to make it more forgiving / accurate collision with 3D ball
-            // Assuming keeper is an upright plane, x will be its width, y its height. z will be minimal.
-            keeperRect.expandByVector(new THREE.Vector3(0.2, 0.2, 0.5)); // Expand slightly
+            const keeperRect = new THREE.Box3().setFromObject(keeper); 
+            // Expand slightly for more accurate 2D sprite collision (adjust as needed)
+            keeperRect.expandByVector(new THREE.Vector3(0.2, 0.2, 0.5)); 
             if (keeperRect.intersectsBox(ballRect)) {
-                return "SAVE!"; // Ball hit keeper
+                return "SAVE!"; 
             }
         } 
-        // Check if ball is within goal frame (width 7.32m, height 2.44m)
         if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) { 
             penalty.playerScore++; 
-            return "GOAL!"; // Ball is within goal and keeper didn't save
+            return "GOAL!"; 
         } 
     } 
-    return null; // No goal, no save yet
+    return null; 
 }
 
 function showResultMessage(msg, callback) { 
     const el = document.getElementById('result-message'); 
     el.textContent = msg; 
-    el.style.display = 'block'; // Show message
+    el.style.display = 'block'; 
     setTimeout(() => { 
-        el.style.display = 'none'; // Hide message after 2 seconds
-        if(callback) callback(); // Call optional callback
+        el.style.display = 'none'; 
+        if(callback) callback(); 
     }, 2000); 
 }
 
 function resetBall() { 
-    ball.position.set(0, 0.2, 11); // Reset ball to starting position
-    ball.velocity.set(0, 0, 0); // Clear linear velocity
-    ball.angularVelocity.set(0, 0, 0); // Clear angular velocity
-    ball.rotation.set(0,0,0); // Reset visual rotation
-    if(shooter) shooter.visible = true; // Show shooter again
+    ball.position.set(0, 0.2, 11); 
+    ball.velocity.set(0, 0, 0); 
+    ball.angularVelocity.set(0, 0, 0); 
+    ball.rotation.set(0,0,0);
+    if(shooter) shooter.visible = true; 
 }
 
 function resetKeeper() { 
     if (keeper) { 
-        // Assuming spriteHeight was captured in loadCharacters. Re-calculating to be safe:
         const currentSpriteHeight = keeper.geometry.parameters.height;
-        keeper.position.set(0, currentSpriteHeight / 2, 0.5); // Reset keeper to original idle position
-        keeper.rotation.set(0, Math.PI, 0); // Ensure sprite faces player
+        keeper.position.set(0, currentSpriteHeight / 2, 0.5); 
+        keeper.rotation.set(0, Math.PI, 0); 
+        
+        // Reset keeper sprite to IDLE when game state is not animating or shot taken
+        if (keeperIdleTexture) { // Ensure idle texture is loaded before attempting to apply
+             keeper.material.map = keeperIdleTexture;
+             currentKeeperFrame = 0; // Reset animation counter
+             lastFrameTime = 0; // Reset frame timing
+        } else {
+             // Fallback if idle texture somehow didn't load
+             if(keeperAnimationTextures.length > 0) {
+                 keeper.material.map = keeperAnimationTextures[0];
+                 currentKeeperFrame = 0;
+                 lastFrameTime = 0;
+             }
+        }
+        keeper.visible = true; // Make sure keeper is visible during a new turn
     } 
 }
 
 
 // --- Main Animation Loop ---
 function animate() {
-    requestAnimationFrame(animate); // Continuously calls animate function
-    const delta = clock.getDelta(); // Time elapsed since last frame (for frame-rate independent motion)
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
     
     // Power bar animation
     if (penalty.state === PENALTY_STATE.POWERING) { 
-        penalty.shotPower += 150 * delta; // Increase power over time
-        if (penalty.shotPower > 100) penalty.shotPower = 100; // Clamp at 100%
+        penalty.shotPower += 150 * delta; 
+        if (penalty.shotPower > 100) penalty.shotPower = 100; 
         document.getElementById('power-bar-inner').style.width = `${penalty.shotPower}%`; 
     }
     
     // Physics and keeper animation when ball is in motion
     if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || penalty.state === PENALTY_STATE.SHOT_TAKEN) {
-        // Keeper dive animation (lerp for smooth movement)
         if (penalty.keeperDive.active && keeper) {
-            const elapsedTime = clock.getElapsedTime() - penalty.keeperDive.startTime;
-            const progress = Math.min(elapsedTime / penalty.keeperDive.duration, 1);
-            // Linear interpolation of keeper position
-            keeper.position.lerpVectors(penalty.keeperDive.start, penalty.keeperDive.end, progress);
+            const elapsedTimeSinceDiveStart = clock.getElapsedTime() - penalty.keeperDive.startTime;
+            const progress = Math.min(elapsedTimeSinceDiveStart / penalty.keeperDive.duration, 1);
             
-            // Adjust keeper's Y position to simulate a dive/jump (simplified)
-            // Use a parabolic motion for height
-            const jumpHeight = 1.0; // Max jump height during dive
-            const parabolicProgress = progress * (1 - progress) * 4; // Max at 0.5, zero at 0 and 1
-            keeper.position.y = penalty.keeperDive.start.y + (parabolicProgress * jumpHeight); // Start_Y + parabola
-
-            // Rotate/lean the keeper sprite during the dive
-            // spriteHeight already used in loadCharacters, should get current one from geometry for consistency
+            // Keeper physical movement (lerp position and simulate jump arc)
+            keeper.position.lerpVectors(penalty.keeperDive.start, penalty.keeperDive.end, progress);
+            const jumpHeight = 1.0; 
+            const parabolicProgress = progress * (1 - progress) * 4; 
+            keeper.position.y = penalty.keeperDive.start.y + (parabolicProgress * jumpHeight); 
+            
+            // Lean/rotate the sprite during the dive
             const currentSpriteWidth = keeper.geometry.parameters.width;
-            const diveLeanAngle = (keeper.position.x / (currentSpriteWidth / 2)) * (Math.PI / 4); // Lean more for wider dives
-            keeper.rotation.z = -diveLeanAngle * progress; // Tilts the sprite
+            const diveLeanAngle = (keeper.position.x / (currentSpriteWidth / 2)) * (Math.PI / 4); 
+            keeper.rotation.z = -diveLeanAngle * progress;
 
-            if (progress >= 1) penalty.keeperDive.active = false;
+            if (progress >= 1) {
+                penalty.keeperDive.active = false; // End keeper's movement after its duration
+                // You might transition the keeper sprite back to an 'after-dive' or idle here
+                // if there are specific sprites for that.
+                if(keeperIdleTexture) keeper.material.map = keeperIdleTexture; // Go back to idle when done
+                currentKeeperFrame = 0; // Reset for next dive
+                lastFrameTime = 0;
+            }
+
+            // --- Keeper sprite animation logic ---
+            // Only update frame if enough time has passed since last frame update
+            const framesElapsed = Math.floor(elapsedTimeSinceDiveStart * KEEPER_FRAME_RATE);
+            if (framesElapsed !== currentKeeperFrame) {
+                currentKeeperFrame = framesElapsed;
+                if (keeperAnimationTextures.length > 0) { // Ensure textures are loaded
+                    const frameIndex = Math.min(currentKeeperFrame, keeperAnimationTextures.length - 1);
+                    if (keeper.material.map !== keeperAnimationTextures[frameIndex]) { // Avoid unnecessary texture updates
+                         keeper.material.map = keeperAnimationTextures[frameIndex];
+                    }
+                }
+            }
+
+        } else if (keeper && keeperIdleTexture) {
+            // If keeper is not diving but game is in shot/animating state,
+            // ensure it shows idle sprite unless you have a "shot follow-through" sprite
+            // This could be removed if you prefer the last dive frame to stick.
+            // keeper.material.map = keeperIdleTexture;
         }
         
-        updateBallPhysics(delta); // Apply realistic ball physics
+        updateBallPhysics(delta); 
 
-        // Apply visual rotation to the ball based on its angular velocity
         if (ball.angularVelocity) {
             ball.rotation.x += ball.angularVelocity.x * delta;
             ball.rotation.y += ball.angularVelocity.y * delta;
             ball.rotation.z += ball.angularVelocity.z * delta;
         }
 
-        // Basic ground collision and bounce for the ball
-        // Ensure ball doesn't go through ground (y < 0.2)
         if (ball.position.y < 0.2) { 
-            ball.position.y = 0.2; // Keep ball at ground level
-            if (ball.velocity.y < -0.1) { // Only bounce if moving downwards significantly
-                ball.velocity.y *= -0.5; // Invert vertical velocity and reduce by half (restitution)
+            ball.position.y = 0.2; 
+            if (ball.velocity.y < -0.1) { 
+                ball.velocity.y *= -0.5; 
             } else {
-                ball.velocity.y = 0; // If barely moving vertically or going up, just set to zero
+                ball.velocity.y = 0; 
             }
-            ball.velocity.x *= 0.9; // Apply some friction on horizontal speed
-            ball.velocity.z *= 0.9; // Apply some friction on depth speed
+            ball.velocity.x *= 0.9; 
+            ball.velocity.z *= 0.9; 
         }
 
         // Check game outcome conditions (goal, save, miss) once keeper animation is considered in progress
         // Only trigger end-of-round state once
         if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || penalty.state === PENALTY_STATE.SHOT_TAKEN) {
-            const result = checkGoalAndSave(ball.position); // Check for goal or save
+            const result = checkGoalAndSave(ball.position); 
             
-            // Check if ball went past goal line or missed entirely (based on position)
             if (result) { 
                 penalty.state = PENALTY_STATE.END_ROUND; 
                 showResultMessage(result, handleKeeperTurn); 
             } else if (ball.position.z < -2 || ball.position.y < -1 || Math.abs(ball.position.x) > 4) { 
-                // Miss conditions: past a certain Z depth, too low (below ground), or too wide of goal
                 penalty.state = PENALTY_STATE.END_ROUND; 
                 showResultMessage("MISS!", handleKeeperTurn); 
             }
@@ -543,4 +571,4 @@ function animate() {
 }
 
 // --- Start the Application ---
-init(); // This function kicks off the entire game when the script loads
+init(); 
