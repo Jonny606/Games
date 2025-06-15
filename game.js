@@ -251,6 +251,7 @@ function loadCharacters(gltfLoader) {
     const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Goalkeeper%20Diving%20Save.glb';
     const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
 
+    // Load the Goalkeeper model
     gltfLoader.load(keeperURL, (gltf) => {
         keeper = gltf.scene;
         keeper.scale.set(0.8, 0.8, 0.8);
@@ -260,6 +261,7 @@ function loadCharacters(gltfLoader) {
         scene.add(keeper);
     });
 
+    // Load the Shooter model
     gltfLoader.load(shooterURL, (gltf) => {
         shooter = gltf.scene;
         shooter.scale.set(0.6, 0.6, 0.6);
