@@ -248,7 +248,7 @@ function loadEnvironment(gltfLoader) {
 
 function loadCharacters(gltfLoader) {
     // These new URLs use jsDelivr to serve your GitHub files with the correct permissions.
-    const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Goalkeeper%20Diving%20Save.glb';
+   const keeperURL = 'https://github.com/Jonny606/Games/releases/download/v2.0/Goalkeeper.Diving.Save.glb';
     const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
 
     // Load the Goalkeeper model
