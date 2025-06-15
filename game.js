@@ -247,19 +247,19 @@ function loadEnvironment(gltfLoader) {
 }
 
 function loadCharacters(gltfLoader) {
-    // Load the Goalkeeper model
-const keeperURL = 'https://github.com/Jonny606/Games/releases/download/v1.0/Goalkeeper.Diving.Save.glb';
+    // These new URLs use jsDelivr to serve your GitHub files with the correct permissions.
+    const keeperURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Goalkeeper%20Diving%20Save.glb';
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
+
     gltfLoader.load(keeperURL, (gltf) => {
         keeper = gltf.scene;
-        keeper.scale.set(0.6, 0.6, 0.6);
+        keeper.scale.set(0.8, 0.8, 0.8);
         keeper.position.set(0, 0, 0.5);
         keeper.rotation.y = Math.PI;
         keeper.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
         scene.add(keeper);
     });
 
-    // Load the Shooter model
-    const shooterURL = 'https://raw.githubusercontent.com/baronwatts/models/master/soccer-player.glb';
     gltfLoader.load(shooterURL, (gltf) => {
         shooter = gltf.scene;
         shooter.scale.set(0.6, 0.6, 0.6);
