@@ -2,13 +2,11 @@
 
 // --- Global State & Constants ---
 let scene, camera, renderer, clock, textureLoader;
-let ball, goal, keeper, shooter; // Using full 3D models now
-let mixer; // For animations later, if any
+let ball, goal, keeper, shooter; // Reverting to simple shapes for stability first
 let playerState = { gold: 5000, myPlayers: [], penaltyTakers: [] };
 const screens = { loading: document.getElementById('loading-screen'), mainMenu: document.getElementById('main-menu'), squad: document.getElementById('squad-screen'), store: document.getElementById('pack-store'), packOpening: document.getElementById('pack-opening-animation'), penaltyUI: document.getElementById('penalty-game-ui'), };
 const PENALTY_STATE = { INACTIVE: 'inactive', AIMING: 'aiming', POWERING: 'powering', SHOT_TAKEN: 'shot_taken', ANIMATING_KEEPER: 'animating_keeper', KEEPER_TURN: 'keeper_turn', END_ROUND: 'end_round' };
 let penalty = { state: PENALTY_STATE.INACTIVE, round: 0, playerScore: 0, opponentScore: 0, shotPower: 0, aim: new THREE.Vector3(), keeperDive: { active: false, start: null, end: null, duration: 0.4 } };
-
 
 // --- Initialization ---
 function init() {
@@ -37,36 +35,20 @@ function init() {
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
     dirLight.shadow.camera.top = 20; dirLight.shadow.camera.bottom = -20;
-    dirLight.shadow.camera.left = -20; dirLight.shadow.camera.right = 20;
-    dirLight.shadow.bias = -0.001;
+    dirLight.shadow.camera.left = -20; dirLight.shadow.camera.right = 20; dirLight.shadow.bias = -0.001;
     scene.add(dirLight);
 
-    const loadingManager = new THREE.LoadingManager();
-    const loadingDetails = document.getElementById('loading-details');
-
-    loadingManager.onProgress = function(url, itemsLoaded, itemsTotal) {
-        loadingDetails.textContent = `Loading asset ${itemsLoaded} of ${itemsTotal}...`;
-    };
-
-    loadingManager.onLoad = function() {
-        console.log('All models loaded successfully!');
-        setTimeout(() => {
-            showScreen('mainMenu');
-            updateGoldUI();
-        }, 200);
-    };
-
-    loadingManager.onError = function(url) {
-        console.error('There was an error loading ' + url);
-        loadingDetails.textContent = 'Error loading assets. Please refresh.';
-    };
-
-    const gltfLoader = new THREE.GLTFLoader(loadingManager);
-    
-    loadEnvironment(gltfLoader);
-    loadCharacters(gltfLoader);
+    createEnvironment(); // Changed name for clarity
+    createCharacters();
 
     setupEventListeners();
+    
+    // Simulate loading by just having a small delay
+    setTimeout(() => {
+        showScreen('mainMenu');
+        updateGoldUI();
+    }, 500);
+
     animate();
 }
 
@@ -214,8 +196,8 @@ function runPackAnimation(player) {
     }, 2500); 
     setTimeout(() => { continueBtn.style.display = 'block'; }, 3500); 
 }
-// --- 3D Model Loading Section ---
-function loadEnvironment(gltfLoader) {
+// --- 3D World & Character Creation ---
+function createEnvironment() {
     const grassColorMap = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg');
     grassColorMap.wrapS = THREE.RepeatWrapping; grassColorMap.wrapT = THREE.RepeatWrapping; grassColorMap.repeat.set(25, 25);
     const grassMaterial = new THREE.MeshStandardMaterial({ map: grassColorMap, roughness: 0.7, metalness: 0.1 });
@@ -245,46 +227,20 @@ function loadEnvironment(gltfLoader) {
     scene.add(goal);
 }
 
-function loadCharacters(gltfLoader, scene) {
-  const keeperURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Goalkeeper%20Diving%20Save.glb';
+function createCharacters() {
+    const keeperGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.9, 16);
+    const keeperMat = new THREE.MeshStandardMaterial({color: 0x1A5D1A, roughness: 0.8 });
+    keeper = new THREE.Mesh(keeperGeo, keeperMat);
+    keeper.position.set(0, 1.9/2, 0.5);
+    keeper.castShadow = true;
+    scene.add(keeper);
 
-    
-    gltfLoader.load(
-    keeperURL,
-    (gltf) => {
-      const keeper = gltf.scene;
-
-      keeper.scale.set(0.8, 0.8, 0.8);
-      keeper.position.set(0, 0, 0.5);
-      keeper.rotation.y = Math.PI;
-
-      keeper.traverse((node) => {
-        if (node.isMesh) node.castShadow = true;
-      });
-
-      scene.add(keeper);
-    },
-    undefined,
-    (error) => {
-      console.error('Error loading goalkeeper model:', error);
-    }
-  );
-}
-    // --- Load the Shooter model (This is your existing correct code) ---
-    const shooterURL = 'https://raw.githubusercontent.com/Jonny606/Games/main/Soccer%20Penalty%20Kick.glb';
-    gltfLoader.load(shooterURL, (gltf) => {
-        shooter = gltf.scene;
-        
-        shooter.scale.set(0.6, 0.6, 0.6); // You can adjust this as needed
-        shooter.position.set(0, 0, 11.5);
-        shooter.rotation.y = Math.PI;
-
-        shooter.traverse(node => { 
-            if (node.isMesh) { node.castShadow = true; } 
-        });
-
-        scene.add(shooter);
-    });
+    const shooterGeo = new THREE.CylinderGeometry(0.35, 0.35, 1.8, 16);
+    const shooterMat = new THREE.MeshStandardMaterial({color: 0xdb2a34, roughness: 0.8});
+    shooter = new THREE.Mesh(shooterGeo, shooterMat);
+    shooter.position.set(0, 1.8/2, 11.5);
+    shooter.castShadow = true;
+    scene.add(shooter);
 }
 // --- Penalty Game Logic ---
 function startPenaltyGame() {
@@ -306,7 +262,7 @@ function onMouseUp(event) { if (penalty.state === PENALTY_STATE.POWERING) { shoo
 function shootBall() {
     penalty.state = PENALTY_STATE.SHOT_TAKEN;
     document.getElementById('aim-reticle').classList.remove('visible');
-    if (shooter) shooter.visible = false;
+    shooter.visible = false; // Hide shooter as they kick
 
     const player = ALL_PLAYERS.find(p => p.id === playerState.penaltyTakers[penalty.round-1]);
     const stats = player.stats;
@@ -320,14 +276,14 @@ function shootBall() {
     triggerKeeperDive();
 }
 
-function triggerKeeperDive() { const random = Math.random(); let diveTargetX = 0; if (random < 0.45) { diveTargetX = -2.5; } else if (random < 0.90) { diveTargetX = 2.5; } if(keeper) { penalty.keeperDive.start = keeper.position.clone(); penalty.keeperDive.end = new THREE.Vector3(diveTargetX, keeper.position.y, keeper.position.z); penalty.keeperDive.startTime = clock.getElapsedTime(); penalty.keeperDive.active = true; } penalty.state = PENALTY_STATE.ANIMATING_KEEPER; }
+function triggerKeeperDive() { const random = Math.random(); let diveTargetX = 0; if (random < 0.45) { diveTargetX = -2.5; } else if (random < 0.90) { diveTargetX = 2.5; } penalty.keeperDive.start = keeper.position.clone(); penalty.keeperDive.end = new THREE.Vector3(diveTargetX, keeper.position.y, keeper.position.z); penalty.keeperDive.startTime = clock.getElapsedTime(); penalty.keeperDive.active = true; penalty.state = PENALTY_STATE.ANIMATING_KEEPER; }
 function handleKeeperTurn() { penalty.state = PENALTY_STATE.KEEPER_TURN; updatePenaltyHUD(); setTimeout(() => { const goalScored = Math.random() < 0.7; if (goalScored) { penalty.opponentScore++; showResultMessage("THEY SCORE", endRound); } else { showResultMessage("THEY MISS!", endRound); } }, 1500); }
 function endRound() { penalty.round++; if (penalty.round > 5) { endGame(); } else { setupPlayerTurn(); updatePenaltyHUD(); resetBall(); resetKeeper(); } }
-function endGame() { document.querySelector('.shot-controls').classList.remove('visible'); let result = "DRAW!", reward = 500; if (penalty.playerScore > penalty.opponentScore) { result = "YOU WIN!"; reward = 1500; } else if (penalty.playerScore < penalty.opponentScore) { result = "YOU LOSE!"; reward = 250; } playerState.gold += reward; showResultMessage(result, () => { if(shooter) shooter.visible = false; if(keeper) keeper.visible = false; showScreen('mainMenu'); }); savePlayerState(); updateGoldUI(); }
-function checkGoalAndSave(ballPos) { if (ballPos.z < 0.5 && ballPos.y > 0) { const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); if (keeper) { const keeperRect = new THREE.Box3().setFromObject(keeper); if (keeperRect.intersectsBox(ballRect)) return "SAVE!"; } if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) { penalty.playerScore++; return "GOAL!"; } } return null; }
+function endGame() { document.querySelector('.shot-controls').classList.remove('visible'); let result = "DRAW!", reward = 500; if (penalty.playerScore > penalty.opponentScore) { result = "YOU WIN!"; reward = 1500; } else if (penalty.playerScore < penalty.opponentScore) { result = "YOU LOSE!"; reward = 250; } playerState.gold += reward; showResultMessage(result, () => { shooter.visible = false; keeper.visible = false; showScreen('mainMenu'); }); savePlayerState(); updateGoldUI(); }
+function checkGoalAndSave(ballPos) { if (ballPos.z < 0.5 && ballPos.y > 0) { const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); const keeperRect = new THREE.Box3().setFromObject(keeper); if (keeperRect.intersectsBox(ballRect)) return "SAVE!"; if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) { penalty.playerScore++; return "GOAL!"; } } return null; }
 function showResultMessage(msg, callback) { const el = document.getElementById('result-message'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; if(callback) callback(); }, 2000); }
-function resetBall() { ball.position.set(0, 0.2, 11); if (ball.velocity) ball.velocity.set(0, 0, 0); if (ball.angularVelocity) ball.angularVelocity.set(0, 0, 0); if(shooter) shooter.visible = true; }
-function resetKeeper() { if (keeper) { keeper.position.set(0, 0.6, 0.5); keeper.rotation.set(0, Math.PI, 0); } }
+function resetBall() { ball.position.set(0, 0.2, 11); if (ball.velocity) ball.velocity.set(0, 0, 0); if (ball.angularVelocity) ball.angularVelocity.set(0, 0, 0); shooter.visible = true; }
+function resetKeeper() { keeper.position.set(1.9 / 2, 0.5); keeper.rotation.set(0, 0, 0); }
 
 
 // --- Animation Loop ---
