@@ -152,7 +152,7 @@ function loadEnvironment() {
 // --- Character Loading: 3D Shooter and 2D Animated Keeper ---
 function loadCharacters(gltfLoader) {
     // 3D SHOOTER MODEL loading
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@master/models/SoccerPenaltyKick.glb';
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb';
 
     gltfLoader.load(shooterURL, (gltf) => { 
         shooter = gltf.scene;
