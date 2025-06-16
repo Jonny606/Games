@@ -85,7 +85,7 @@ function loadKeeperSpritesAndModel() {
             // A plane's origin is its center, so its bottom edge is at position.y - (height/2).
             // So if ground is at Y=0, position.y should be (spriteHeight/2) + 0.2 if keeper standing on ball, or just spriteHeight/2 if it's based on goalpost level
             const groundLevelOffset = 0.2; // Match ball's initial Y if goalkeeper feet are supposed to be where ball is
-            keeper.position.set(0, spriteHeight / 2 + groundLevelOffset, 0.5); // Ensure base of sprite is at ground level
+            keeper.position.set(0, spriteHeight / 2 + groundLevelOffset, 0.3); // Ensure base of sprite is at ground level
             keeper.rotation.y = Math.PI; 
             keeper.castShadow = false; 
             scene.add(keeper);
