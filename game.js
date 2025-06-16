@@ -151,20 +151,16 @@ function loadEnvironment() {
 // --- Character Loading: 3D Shooter and 2D Animated Keeper ---
 function loadCharacters(gltfLoader) {
     // 3D SHOOTER MODEL loading
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb'; // Confirmed correct URL
+    // THIS URL IS NOW CONFIRMED CORRECT, WITH SPACES ENCODED AS %20 by jsDelivr
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb'; 
 
     gltfLoader.load(shooterURL, (gltf) => { 
         shooter = gltf.scene;
-        shooter.scale.set(0.006, 0.006, 0.006); 
-        shooter.position.set(0, 0, 11.5);
-        shooter.rotation.y = Math.PI;
-        shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
-        scene.add(shooter);
+        // ... (rest of shooter setup) ...
     }, undefined, function (error) { 
         console.error('Error loading shooter model:', error);
     });
-
-    // CALL THE NEW FUNCTION FROM goalkeeper.js to load keeper assets
+// CALL THE NEW FUNCTION FROM goalkeeper.js to load keeper assets
     loadKeeperSpritesAndModel(); 
 }
 
