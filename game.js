@@ -518,7 +518,7 @@ function loadEnvironment() {
 
 function loadCharacters(gltfLoader) {
 
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb';
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/Soccer%20Penalty%20Kick.glb';
 
     gltfLoader.load(shooterURL, (gltf) => {
 
@@ -649,8 +649,14 @@ function setupPlayerTurn() {
     ball.visible = true;
 
 }
-
-
+ function resetBall() {
+    if (ball) {
+        ball.position.set(BALL_START_POS.x, BALL_START_POS.y, BALL_START_POS.z);
+        ball.velocity.set(0, 0, 0);
+        ball.angularVelocity.set(0, 0, 0);
+        ball.visible = true;
+    }
+}
 
 function updatePenaltyHUD() {
 
