@@ -2,12 +2,12 @@
 
 // --- Global State & Constants ---
 let scene, camera, renderer, clock, textureLoader;
-let ball, goal, shooter; // 'keeper' variable exists globally, made available from goalkeeper.js
+let ball, goal, shooter; // 'keeper' variable exists globally from goalkeeper.js, don't re-declare it here.
 
 let playerState = { gold: 5000, myPlayers: [], penaltyTakers: [] };
 const screens = { loading: document.getElementById('loading-screen'), mainMenu: document.getElementById('main-menu'), squad: document.getElementById('squad-screen'), store: document.getElementById('pack-store'), packOpening: document.getElementById('pack-opening-animation'), penaltyUI: document.getElementById('penalty-game-ui'), };
 
-// NEW: Added OPPONENT_SHOT state
+// Added OPPONENT_SHOT state to PENALTY_STATE
 const PENALTY_STATE = { INACTIVE: 'inactive', AIMING: 'aiming', POWERING: 'powering', SHOT_TAKEN: 'shot_taken', ANIMATING_KEEPER: 'animating_keeper', KEEPER_TURN: 'keeper_turn', OPPONENT_SHOT: 'opponent_shot', END_ROUND: 'end_round' };
 
 let penalty = { 
@@ -19,12 +19,11 @@ let penalty = {
     aim: new THREE.Vector3(), 
     keeperDive: { 
         active: false, 
-        start: null, 
-        end: null, 
-        duration: 0.4, // Player keeper's dive duration
-        animationSet: 'idle' // Controls which sprite animation sequence is played ('left', 'right', 'idle')
+        start: new THREE.Vector3(), // Initialize with Vector3 to avoid 'undefined'
+        end: new THREE.Vector3(),   // Initialize with Vector3 to avoid 'undefined'
+        duration: 0.4,
+        animationSet: 'idle' 
     }
-    // No opponentKeeperDive in penalty. This time, our single 'keeper' object will dive for the opponent's shot.
 };
 
 // --- Realistic Physics Constants (unchanged) ---
@@ -152,7 +151,7 @@ function loadEnvironment() {
 // --- Character Loading: 3D Shooter and 2D Animated Keeper ---
 function loadCharacters(gltfLoader) {
     // 3D SHOOTER MODEL loading
-    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb';
+    const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb'; // Confirmed correct URL
 
     gltfLoader.load(shooterURL, (gltf) => { 
         shooter = gltf.scene;
@@ -221,14 +220,13 @@ function setupPlayerTurn() {
             keeper.material.map.needsUpdate = true;
         }
         penalty.keeperDive.animationSet = 'idle'; 
-        resetGoalkeeperState(); // Ensures keeper is in correct idle visual/physical state
+        resetGoalkeeperState(); 
     }
     ball.visible = true; 
 }
 
 function updatePenaltyHUD() { 
     document.getElementById('penalty-score').textContent = `Player ${penalty.playerScore} - ${penalty.opponentScore} Opponent`; 
-    // FIX: Update turn text based on NEW PENALTY_STATE for clarity
     const turnText = (penalty.state === PENALTY_STATE.KEEPER_TURN || penalty.state === PENALTY_STATE.OPPONENT_SHOT) ? "Opponent's Turn" : `Your Turn - Taker #${penalty.round}`; 
     document.getElementById('penalty-info').textContent = `Round ${penalty.round}/5: ${turnText}`; 
 }
@@ -245,8 +243,8 @@ function onMouseMove(event) {
     raycaster.setFromCamera(mouse, camera); 
     raycaster.ray.intersectPlane(plane, penalty.aim); 
     
-    penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.66, 3.66); // From goal post left to right
-    penalty.aim.y = THREE.MathUtils.clamp(penalty.aim.y, 0.1, 2.3); // Ground level to slightly below crossbar
+    penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.66, 3.66); 
+    penalty.aim.y = THREE.MathUtils.clamp(penalty.aim.y, 0.1, 2.3); 
 
     const screenPos = penalty.aim.clone().project(camera); 
     const reticle = document.getElementById('aim-reticle'); 
@@ -271,7 +269,7 @@ function shootBall() {
     penalty.state = PENALTY_STATE.SHOT_TAKEN;
     document.getElementById('aim-reticle').classList.remove('visible'); 
     if (shooter) shooter.visible = false; 
-    ball.visible = true; // Ensure ball is visible after shooting
+    ball.visible = true; 
 
     const player = ALL_PLAYERS.find(p => p.id === playerState.penaltyTakers[penalty.round-1]);
     const stats = player ? player.stats : { speed: 50, control: 50, curve: 50 }; 
@@ -306,63 +304,55 @@ function shootBall() {
 
 // NEW FUNCTION: Simulates the opponent's shot
 function triggerOpponentShot() {
-    if (!ball || !keeper) return; // Ensure objects are initialized
+    if (!ball || !keeper) return; 
 
     penalty.state = PENALTY_STATE.OPPONENT_SHOT;
-    ball.visible = true; // Ensure ball is visible for opponent's shot
+    ball.visible = true; 
 
-    // Position ball at opponent's theoretical kick spot (behind goal, facing towards player)
-    const OPPONENT_KICK_DISTANCE = -11; // Opponent shoots from 11m, just mirrored to -11Z
-    ball.position.set(0, 0.2, OPPONENT_KICK_DISTANCE); // Start central, at ground level, 11m beyond goal.
-    ball.velocity.set(0, 0, 0); // Reset existing motion
+    // Position ball at opponent's theoretical kick spot
+    const OPPONENT_KICK_DISTANCE = -11; 
+    ball.position.set(0, 0.2, OPPONENT_KICK_DISTANCE); 
+    ball.velocity.set(0, 0, 0); 
     ball.angularVelocity.set(0, 0, 0);
 
-    // Simulate opponent's aim: Target within the player's goal posts
-    const targetX = Math.random() * 6 - 3; // Random X within +/- 3m from center for shot (approx goal)
-    const targetY = Math.random() * 2;   // Random Y within 0-2m height (approx goal)
+    const targetX = Math.random() * 6 - 3; 
+    const targetY = Math.random() * 2;   
     
-    // Direction: From opponent's ball start position towards keeper/goal (player's goal)
-    // The target here would be the center of *your* goal posts, or keeper's position
-    const opponentAimPoint = new THREE.Vector3(targetX, targetY, 0.5); // Target towards keeper/goal line (Z=0.5 or 0)
+    const opponentAimPoint = new THREE.Vector3(targetX, targetY, 0.5); 
     const direction = opponentAimPoint.sub(ball.position).normalize();
 
-    // Random power and inaccuracy for opponent's shot
-    const opponentPower = Math.random() * 10 + 25; // Example: 25-35 m/s
-    const opponentInaccuracyFactor = Math.random() * 0.3; // 0 to 0.3 for side inaccuracy
+    const opponentPower = Math.random() * 10 + 25; 
+    const opponentInaccuracyFactor = Math.random() * 0.3; 
     direction.x += (Math.random() - 0.5) * opponentInaccuracyFactor * 2; 
     direction.y += (Math.random() - 0.5) * opponentInaccuracyFactor;
 
     ball.velocity.copy(direction.multiplyScalar(opponentPower));
 
-    // Simulate spin for opponent's ball
     ball.angularVelocity.set(Math.random() * 5, (Math.random() - 0.5) * 20, Math.random() * 10);
     ball.angularVelocity.clampLength(0, 100);
 
-    // Now, trigger YOUR keeper's dive reaction to opponent's incoming shot
+    // Trigger YOUR keeper's dive reaction to opponent's incoming shot
     let diveTargetXForOpponentShot = 0;
-    let diveAnimSetForOpponentShot = 'right'; // Default, will change based on ball X
+    let diveAnimSetForOpponentShot = 'right'; 
 
-    // Player's keeper reacts based on where ball is heading, NOT fixed X as it did before.
-    // Let's make keeper dive to where the ball is approximately going to cross the goal line (Z=0.5)
-    // Estimate ball's X at Z=0.5
     const ballCurrentPos = ball.position.clone();
     const ballCurrentVel = ball.velocity.clone();
     
-    // Simple time-to-goal approximation (can be refined with actual intersection calculation)
-    const timeToGoalLine = (ballCurrentPos.z - 0.5) / -ballCurrentVel.z; // Approx time if z velocity is negative
+    // Estimate ball's X at Z=0.5
+    const timeToGoalLine = (ballCurrentPos.z - 0.5) / -ballCurrentVel.z; 
 
-    if (timeToGoalLine > 0) { // If ball is moving towards goal
+    if (timeToGoalLine > 0) { 
         const estimatedImpactX = ballCurrentPos.x + ballCurrentVel.x * timeToGoalLine;
 
-        if (estimatedImpactX < -1) { // Ball heading left side
+        if (estimatedImpactX < -1) { 
             diveTargetXForOpponentShot = -2.5; 
             diveAnimSetForOpponentShot = 'left';
-        } else if (estimatedImpactX > 1) { // Ball heading right side
+        } else if (estimatedImpactX > 1) { 
             diveTargetXForOpponentShot = 2.5; 
             diveAnimSetForOpponentShot = 'right';
-        } else { // Ball heading central
+        } else { 
             const randCentralDive = Math.random();
-            if(randCentralDive < 0.5) { // 50% left, 50% right even if central
+            if(randCentralDive < 0.5) { 
                  diveTargetXForOpponentShot = -1.5; diveAnimSetForOpponentShot = 'left';
             } else {
                  diveTargetXForOpponentShot = 1.5; diveAnimSetForOpponentShot = 'right';
@@ -370,29 +360,26 @@ function triggerOpponentShot() {
         }
     }
 
-    // Set YOUR keeper's dive state
+    // Set YOUR keeper's dive state, using `keeperDive` object
     penalty.keeperDive.active = true;
     penalty.keeperDive.startTime = clock.getElapsedTime();
-    penalty.keeperDive.start = keeper.position.clone(); // Your keeper starts from its current position
+    penalty.keeperDive.start = keeper.position.clone(); 
     penalty.keeperDive.end = new THREE.Vector3(diveTargetXForOpponentShot, keeper.position.y, keeper.position.z);
-    penalty.keeperDive.duration = 0.5; // Your keeper's reaction speed to opponent's shot
+    penalty.keeperDive.duration = 0.5; 
     penalty.keeperDive.animationSet = diveAnimSetForOpponentShot; 
 
-    // Hide player's shooter for opponent's turn (already invisible from prev turns)
     if (shooter) shooter.visible = false; 
     document.getElementById('aim-reticle').classList.remove('visible'); 
 }
 
-
 // Manages the transition TO the opponent's shot phase
 function handleKeeperTurn() { 
-    penalty.state = PENALTY_STATE.KEEPER_TURN; // Temporarily show 'Keeper Turn'
+    penalty.state = PENALTY_STATE.KEEPER_TURN; 
     updatePenaltyHUD(); 
     
-    // Add a slight delay before the opponent 'shoots'
     setTimeout(() => {
-        triggerOpponentShot(); // Opponent makes the actual shot (ball physics starts)
-    }, 1500); // 1.5 seconds delay before opponent shoots
+        triggerOpponentShot(); 
+    }, 1500); 
 }
 
 function endRound() { 
@@ -400,7 +387,6 @@ function endRound() {
     if (penalty.round > 5) { 
         endGame(); 
     } else { 
-        // Delay to allow result message to be seen before next turn setup
         setTimeout(() => {
             setupPlayerTurn(); 
             updatePenaltyHUD(); 
@@ -422,7 +408,7 @@ function endGame() {
     showResultMessage(result, () => { 
         if(shooter) shooter.visible = false; 
         if(keeper) keeper.visible = false; 
-        ball.visible = false; // Ensure ball is hidden when returning to main menu
+        ball.visible = false; 
         showScreen('mainMenu'); 
     }); 
     savePlayerState(); 
@@ -430,53 +416,60 @@ function endGame() {
 }
 
 function checkGoalAndSave(ballPos) { 
-    let outcome = null; // Changed result to outcome to avoid name clash
+    let outcome = null; 
     const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); 
 
-    // Only check if ball is near goal. Goal Z is 0, so 0.5 means slightly in front.
-    // IMPORTANT: For opponent's shot, ball.z becomes POSITIVE as it moves FROM the goal TOWARDS player.
-    // So the check becomes ball.z > 0 (or some value >0 towards player).
-    // Let's define the "impact zone" where goals/saves happen (around goal Z = 0)
-    const GOAL_LINE_Z_MIN = -0.5; // Slightly behind goal
-    const GOAL_LINE_Z_MAX = 0.5;  // Slightly in front of goal
+    const GOAL_LINE_Z_MIN = -0.5; 
+    const GOAL_LINE_Z_MAX = 0.5;  
 
-    // Only proceed if ball is within the Z-depth range of the goal
     if (ballPos.y > 0 && ballPos.z > GOAL_LINE_Z_MIN && ballPos.z < GOAL_LINE_Z_MAX) { 
         if (keeper) { 
             const keeperRect = new THREE.Box3().setFromObject(keeper); 
-            // Expand to roughly match character hit area
-            keeperRect.expandByVector(new THREE.Vector3(0.3, 0.3, 0.5)); // Z extended more for depth perception
+            keeperRect.expandByVector(new THREE.Vector3(0.3, 0.3, 0.5)); 
             if (keeperRect.intersectsBox(ballRect)) {
                 outcome = "SAVE!"; 
             }
         } 
         
-        // If within goal posts AND no save detected
         if (Math.abs(ballPos.x) < 3.66 && ballPos.y < 2.44) { 
-            if (outcome !== "SAVE!") { // It's a GOAL if it passes keeper and within posts
+            if (outcome !== "SAVE!") { 
                 outcome = "GOAL!";
             }
         } 
     }
 
-    // Now, determine if it's a "MISS!" if ball is far from goal
-    // Critically check both for player (Z large positive) and opponent (Z large negative)
-    const MISS_Z_DISTANCE_PLAYER = 0.5 + 2; // Pass Z=0.5, then another 2 units towards goal
-    const MISS_Z_DISTANCE_OPPONENT = -0.5 - 2; // Pass Z=-0.5, then another 2 units towards shooter
-
-    if (penalty.state === PENALTY_STATE.SHOT_TAKEN || penalty.state === PENALTY_STATE.ANIMATING_KEEPER) { // Player's Shot
-        if (outcome === null && (ballPos.z < GOAL_LINE_Z_MIN || Math.abs(ballPos.x) > 3.7 || ballPos.y < -0.5 || ballPos.y > 5)) { // Passed goal, or wide, or too low/high
-            outcome = "MISS!";
-        }
-    } else if (penalty.state === PENALTY_STATE.OPPONENT_SHOT) { // Opponent's Shot (ball moves opposite Z)
-        if (outcome === null && (ballPos.z > GOAL_LINE_Z_MAX || Math.abs(ballPos.x) > 3.7 || ballPos.y < -0.5 || ballPos.y > 5)) {
-            outcome = "MISS!";
+    // Now, determine if it's a "MISS!" if ball is far from goal. This is crucial for states after it passes goal line area.
+    // Ensure the ball moves far enough from the target before declaring MISS
+    const checkZMissThresholdPlayer = -5; // Player's shot passes the goal
+    const checkZMissThresholdOpponent = 5;  // Opponent's shot passes player's "area" (goal is Z=0)
+    
+    // Condition to trigger a miss *after* it's past the goal area if no other outcome was found
+    if (outcome === null) {
+        if (penalty.state === PENALTY_STATE.SHOT_TAKEN || penalty.state === PENALTY_STATE.ANIMATING_KEEPER) { // Player's Shot
+            if (ballPos.z < checkZMissThresholdPlayer || Math.abs(ballPos.x) > 4 || ballPos.y < -0.5 || ballPos.y > 5) {
+                outcome = "MISS!";
+            }
+        } else if (penalty.state === PENALTY_STATE.OPPONENT_SHOT) { // Opponent's Shot
+             if (ballPos.z > checkZMissThresholdOpponent || Math.abs(ballPos.x) > 4 || ballPos.y < -0.5 || ballPos.y > 5) {
+                outcome = "MISS!";
+            }
         }
     }
+
+
+    // Now, handle score updates based on the final determined outcome
+    if (outcome === "GOAL!") {
+        if (penalty.state === PENALTY_STATE.SHOT_TAKEN || penalty.state === PENALTY_STATE.ANIMATING_KEEPER) { 
+            penalty.playerScore++; 
+        } else if (penalty.state === PENALTY_STATE.OPPONENT_SHOT) { 
+            penalty.opponentScore++;
+        }
+    }
+    // For "SAVE!" or "MISS!", no score update.
     
-    // Return final outcome for display
-    return outcome;
+    return outcome; // Returns "GOAL!", "SAVE!", "MISS!", or null
 }
+
 
 function showResultMessage(msg, callback) { 
     const el = document.getElementById('result-message'); 
@@ -489,17 +482,16 @@ function showResultMessage(msg, callback) {
 }
 
 function resetBall() { 
-    ball.position.set(0, 0.2, 11); // Ball always starts from player's kick spot
+    ball.position.set(0, 0.2, 11); 
     ball.velocity.set(0, 0, 0); 
     ball.angularVelocity.set(0, 0, 0); 
     ball.rotation.set(0,0,0);
     if(shooter) shooter.visible = true; 
-    ball.visible = true; // Ensure ball is visible on reset for the next turn
+    ball.visible = true; 
 }
 
 function resetKeeper() { 
-    resetGoalkeeperState(); // Calls function from goalkeeper.js to reset visual/physical state
-    // Reset specific penalty dive state flags here as they are on the keeper object itself (in `penalty.keeperDive`)
+    resetGoalkeeperState(); // This calls the function from goalkeeper.js
     penalty.keeperDive.active = false;
     penalty.keeperDive.animationSet = 'idle'; 
 }
@@ -515,11 +507,10 @@ function animate() {
         document.getElementById('power-bar-inner').style.width = `${penalty.shotPower}%`; 
     }
     
-    // Call the external goalkeeper update function regardless of whose turn it is
-    // The `updateGoalkeeper` function internally determines if a player dive or opponent dive is active.
+    // Call the external goalkeeper update function to manage its animations and position
     updateGoalkeeper(delta, penalty); 
 
-    // Apply ball physics and check outcomes ONLY IF a ball is actively in flight (player or opponent's shot).
+    // Apply ball physics and check outcomes ONLY IF a ball is actively in flight.
     if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || 
         penalty.state === PENALTY_STATE.SHOT_TAKEN ||
         penalty.state === PENALTY_STATE.OPPONENT_SHOT) 
@@ -546,12 +537,10 @@ function animate() {
         const outcome = checkGoalAndSave(ball.position); 
         
         if (outcome) { 
-            penalty.state = PENALTY_STATE.END_ROUND; // Immediately move to end round to process result
-            
-            showResultMessage(outcome, handleKeeperTurn); // Show message and trigger end of turn flow
+            penalty.state = PENALTY_STATE.END_ROUND; 
+            showResultMessage(outcome, endRound); // Let endRound handle the actual turn progression after message
         }
     } 
-    // No explicit else or other animation handling needed, the state machine and game logic drives this.
     
     renderer.render(scene, camera);
 }
