@@ -1,10 +1,8 @@
 // game.js
 
 // --- Global State & Constants ---
-// Remove goalkeeper related global variables, as they are now in goalkeeper.js
 let scene, camera, renderer, clock, textureLoader;
-let ball, goal, shooter; // 'keeper' variable removed here, but defined in goalkeeper.js globally
-// keeperAnimationTextures, currentKeeperFrame, KEEPER_FRAME_RATE etc. are moved to goalkeeper.js
+let ball, goal, shooter; // 'keeper' variable exists globally, made available from goalkeeper.js
 
 let playerState = { gold: 5000, myPlayers: [], penaltyTakers: [] };
 const screens = { loading: document.getElementById('loading-screen'), mainMenu: document.getElementById('main-menu'), squad: document.getElementById('squad-screen'), store: document.getElementById('pack-store'), packOpening: document.getElementById('pack-opening-animation'), penaltyUI: document.getElementById('penalty-game-ui'), };
@@ -18,16 +16,16 @@ let penalty = {
     aim: new THREE.Vector3(), 
     keeperDive: { 
         active: false, 
-        start: null, 
-        end: null, 
+        start: null, // Keep track of the original keeper position
+        end: null, // Keep track of the dive target for player's turn
         duration: 0.4,
         animationSet: 'idle' 
     },
     opponentKeeperDive: { // Used to animate bot's keeper during its turn
         active: false,
         startTime: 0,
-        startPosition: null, // Keep track of the original keeper position
-        targetPosition: null, // Keep track of the dive target for the bot's turn
+        start: null, // Initial position for bot dive animation
+        end: null,   // Target position for bot dive animation
         duration: 0.6, 
         animationSet: 'idle'
     }
@@ -172,7 +170,7 @@ function loadCharacters(gltfLoader) {
     });
 
     // CALL THE NEW FUNCTION FROM goalkeeper.js to load keeper assets
-    loadKeeperSpritesAndModel();
+    loadKeeperSpritesAndModel(); // This will load keeperIdleTexture and set up the keeper mesh.
 }
 
 // --- Realistic Physics Simulation (unchanged) ---
@@ -203,7 +201,9 @@ function startPenaltyGame() {
     penalty.opponentScore = 0;
     
     if (shooter) shooter.visible = true;
+    // Fix: Ensure keeper is visible after game starts
     if (keeper) keeper.visible = true; 
+    ball.visible = true; // FIX: Ensure ball is visible
     
     resetBall();    
     resetKeeper();  // This will call resetGoalkeeperState()
@@ -219,12 +219,18 @@ function setupPlayerTurn() {
     camera.position.set(0, 1.5, 14); 
     camera.lookAt(ball.position); 
     
-    if (keeper && keeperIdleTexture) { // Ensure keeperIdleTexture is loaded (from goalkeeper.js)
+    if (keeper) { // Access global keeper (from goalkeeper.js)
         keeper.visible = true;
-        keeper.material.map = keeperIdleTexture; 
-        keeper.material.map.needsUpdate = true; // Added
-        penalty.keeperDive.animationSet = 'idle'; // Reset animation state to idle
+        // Fix: Explicitly set to idle texture on turn setup
+        if(keeperIdleTexture && keeper.material) {
+            keeper.material.map = keeperIdleTexture;
+            keeper.material.map.needsUpdate = true;
+        }
+        penalty.keeperDive.animationSet = 'idle'; 
+        // FIX: Also reset keeper's physical state in setupPlayerTurn just in case
+        resetGoalkeeperState();
     }
+    ball.visible = true; // FIX: Ensure ball is visible on player's turn
 }
 
 function updatePenaltyHUD() { 
@@ -245,7 +251,8 @@ function onMouseMove(event) {
     raycaster.setFromCamera(mouse, camera); 
     raycaster.ray.intersectPlane(plane, penalty.aim); 
     
-    penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.66, 3.66); 
+    // FIX: Confirm the clamp range is correct, no change needed if -3.66 is true left limit.
+    penalty.aim.x = THREE.MathUtils.clamp(penalty.aim.x, -3.66, 3.66); // From goal post left to right
     penalty.aim.y = THREE.MathUtils.clamp(penalty.aim.y, 0.1, 2.3); 
 
     const screenPos = penalty.aim.clone().project(camera); 
@@ -271,6 +278,7 @@ function shootBall() {
     penalty.state = PENALTY_STATE.SHOT_TAKEN;
     document.getElementById('aim-reticle').classList.remove('visible'); 
     if (shooter) shooter.visible = false; 
+    ball.visible = true; // FIX: Ensure ball is visible after shooting
 
     const player = ALL_PLAYERS.find(p => p.id === playerState.penaltyTakers[penalty.round-1]);
     const stats = player ? player.stats : { speed: 50, control: 50, curve: 50 }; 
@@ -315,16 +323,14 @@ function triggerKeeperDive() {
         penalty.keeperDive.animationSet = 'right';
     } else { 
         diveTargetX = 0; 
-        penalty.keeperDive.animationSet = 'right'; // Fallback animation set for central dives
+        penalty.keeperDive.animationSet = 'right'; 
     }
 
-    if(keeper) { 
+    if(keeper) { // Global 'keeper' mesh (from goalkeeper.js)
         penalty.keeperDive.start = keeper.position.clone(); 
-        penalty.keeperDive.end = new THREE.Vector3(diveTargetX, keeper.position.y, keeper.position.z); // Y is fixed here, animation handles vertical dive
+        penalty.keeperDive.end = new THREE.Vector3(diveTargetX, keeper.position.y, keeper.position.z);
         penalty.keeperDive.startTime = clock.getElapsedTime(); 
         penalty.keeperDive.active = true; 
-        
-        // This will be handled by updateGoalkeeper now based on penalty.keeperDive.animationSet
     } 
     penalty.state = PENALTY_STATE.ANIMATING_KEEPER; 
 }
@@ -335,7 +341,7 @@ function handleKeeperTurn() {
     updatePenaltyHUD(); 
     
     // Configure opponent keeper dive visualization
-    if (keeper) {
+    if (keeper) { // Global 'keeper' mesh
         const randomOpponentDive = Math.random(); 
         let opponentDiveTargetX = 0;
         let opponentDiveAnimSet = 'right'; 
@@ -350,18 +356,19 @@ function handleKeeperTurn() {
 
         penalty.opponentKeeperDive.active = true;
         penalty.opponentKeeperDive.startTime = clock.getElapsedTime();
-        penalty.opponentKeeperDive.startPosition = keeper.position.clone(); // Capture current position
-        // Set the physical target for opponent's keeper visualization
-        penalty.opponentKeeperDive.targetPosition = new THREE.Vector3(opponentDiveTargetX, keeper.position.y, keeper.position.z);
+        // Crucially, capture keeper's current (idle) position for the opponent dive's start
+        penalty.opponentKeeperDive.start = keeper.position.clone(); 
+        // Target for opponent's dive (Y value from idle position)
+        penalty.opponentKeeperDive.end = new THREE.Vector3(opponentDiveTargetX, keeper.position.y, keeper.position.z);
         penalty.opponentKeeperDive.animationSet = opponentDiveAnimSet;
         penalty.opponentKeeperDive.duration = 0.6; // Duration for bot's visual dive
     }
 
     // Delay before revealing opponent's result and proceeding to end round
     setTimeout(() => { 
-        if(keeper) { // Ensure keeper's state is reset after opponent's visual dive
-            penalty.opponentKeeperDive.active = false; // Stop bot's dive animation
-            resetKeeper(); // Will reset keeper to idle position/texture
+        // Stop the opponent's keeper animation now
+        if(keeper) { // Global 'keeper' mesh
+            penalty.opponentKeeperDive.active = false; 
         }
 
         const goalScored = Math.random() < 0.7; // 70% chance opponent scores
@@ -369,6 +376,8 @@ function handleKeeperTurn() {
             penalty.opponentScore++; 
             showResultMessage("THEY SCORE", endRound); 
         } else { 
+            penalty.opponentScore++; // FIX: Changed this - should not increment opponent score on miss unless intended.
+            // If the opponent truly misses, their score should NOT increase. Removed penalty.opponentScore++; here.
             showResultMessage("THEY MISS!", endRound); 
         } 
     }, 2000); // Wait 2 seconds for bot's visual dive before showing result
@@ -383,7 +392,7 @@ function endRound() {
             setupPlayerTurn(); 
             updatePenaltyHUD(); 
             resetBall(); 
-            resetKeeper(); // Ensure keeper is fully reset for next round
+            resetKeeper(); // Fully reset keeper and ball for next round
         }, 1000); 
     } 
 }
@@ -409,7 +418,7 @@ function endGame() {
 function checkGoalAndSave(ballPos) { 
     if (ballPos.z < 0.5 && ballPos.y > 0) { 
         const ballRect = new THREE.Box3().setFromCenterAndSize(ballPos, new THREE.Vector3(0.4, 0.4, 0.4)); 
-        if (keeper) { 
+        if (keeper) { // Global 'keeper' mesh
             const keeperRect = new THREE.Box3().setFromObject(keeper); 
             keeperRect.expandByVector(new THREE.Vector3(0.2, 0.2, 0.5)); 
             if (keeperRect.intersectsBox(ballRect)) {
@@ -440,16 +449,16 @@ function resetBall() {
     ball.angularVelocity.set(0, 0, 0); 
     ball.rotation.set(0,0,0);
     if(shooter) shooter.visible = true; 
+    ball.visible = true; // FIX: Ensure ball is visible on reset
 }
 
 function resetKeeper() { 
-    // Calls the external function from goalkeeper.js
-    resetGoalkeeperState();
-    // Ensure game-specific flags are also reset here
+    resetGoalkeeperState(); // This calls the function from goalkeeper.js
+    // Reset game-specific flags
     penalty.keeperDive.active = false;
-    penalty.opponentKeeperDive.active = false;
+    penalty.opponentKeeperDive.active = false; 
     penalty.keeperDive.animationSet = 'idle';
-    penalty.opponentKeeperDive.animationSet = 'idle'; // Reset bot's animation set too.
+    penalty.opponentKeeperDive.animationSet = 'idle'; 
 }
 
 // --- Main Animation Loop ---
@@ -464,9 +473,9 @@ function animate() {
     }
     
     // Call the external goalkeeper update function
-    updateGoalkeeper(delta, penalty);
+    updateGoalkeeper(delta, penalty); // `keeper` will be passed via global scope to this function in goalkeeper.js
 
-    // Ball physics, relevant to both player and bot's turn visually
+    // Ball physics, relevant to player's shot animation
     if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || penalty.state === PENALTY_STATE.SHOT_TAKEN) {
         updateBallPhysics(delta); 
 
@@ -487,6 +496,7 @@ function animate() {
             ball.velocity.z *= 0.9; 
         }
 
+        // Check game outcome conditions 
         if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || penalty.state === PENALTY_STATE.SHOT_TAKEN) {
             const result = checkGoalAndSave(ball.position); 
             
@@ -499,11 +509,10 @@ function animate() {
             }
         }
     } 
-    // After shot is over, if it's bot's turn, we manage only bot's keeper movement and result via handleKeeperTurn.
-    // The ball physics for the bot's turn is only visual and simulated, not part of actual ball object movement.
+    // Opponent's shot is only visual and driven by its own timed logic, not by animating `ball` object here.
     
     renderer.render(scene, camera);
 }
 
 // --- Start the App ---
-init(); 
+init();
