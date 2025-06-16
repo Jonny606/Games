@@ -71,7 +71,7 @@ function loadKeeperSpritesAndModel() {
             // --- IMPORTANT ADJUSTMENTS FOR KEEPER APPEARANCE AND INITIALIZATION ---
             // Visual tuning based on your screenshot and typical sprite use.
             // These numbers might still need fine-tuning through trial-and-error by you.
-            const desiredVisualHeightMeters = 2.2; // Made taller, common issue with sprites appearing small.
+            const desiredVisualHeightMeters = 2.5; // Made taller, common issue with sprites appearing small.
             // Aspect ratio calculation from native image. This assumes the content occupies the whole image.
             const spriteAspectRatio = _initialSpriteNativeWidth / _initialSpriteNativeHeight;
             const desiredVisualWidthMeters = desiredVisualHeightMeters * spriteAspectRatio;
