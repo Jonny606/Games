@@ -10,7 +10,6 @@ const REWARD_LOSE = 250;
 const REWARD_DRAW = 500;
 const PACK_COST = 1000;
 const PENALTY_ROUNDS = 5;
-const BALL_START_POS = { x: 0, y: 0.2, z: 11 };
 // -- Physics constants --
 
 const g = 9.81;
