@@ -657,6 +657,17 @@ function setupPlayerTurn() {
         ball.visible = true;
     }
 }
+ function resetKeeper() {
+    if (keeper) {
+        // Set to starting position; adjust as needed for your model
+        keeper.position.set(0, 0, 0); 
+        keeper.visible = true;
+        // You can also reset animation or state if your keeper uses those
+        if (typeof resetGoalkeeperState === "function") {
+            resetGoalkeeperState();
+        }
+    }
+}
 
 function updatePenaltyHUD() {
 
