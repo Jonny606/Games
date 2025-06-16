@@ -2,12 +2,12 @@
 
 // --- Global State & Constants ---
 let scene, camera, renderer, clock, textureLoader;
-let ball, goal, shooter; // 'keeper' variable exists globally from goalkeeper.js, don't re-declare it here.
+let ball, goal, shooter; // 'keeper' variable is global from goalkeeper.js, do not re-declare here.
 
 let playerState = { gold: 5000, myPlayers: [], penaltyTakers: [] };
 const screens = { loading: document.getElementById('loading-screen'), mainMenu: document.getElementById('main-menu'), squad: document.getElementById('squad-screen'), store: document.getElementById('pack-store'), packOpening: document.getElementById('pack-opening-animation'), penaltyUI: document.getElementById('penalty-game-ui'), };
 
-// Added OPPONENT_SHOT state to PENALTY_STATE
+// Added OPPONENT_SHOT state
 const PENALTY_STATE = { INACTIVE: 'inactive', AIMING: 'aiming', POWERING: 'powering', SHOT_TAKEN: 'shot_taken', ANIMATING_KEEPER: 'animating_keeper', KEEPER_TURN: 'keeper_turn', OPPONENT_SHOT: 'opponent_shot', END_ROUND: 'end_round' };
 
 let penalty = { 
@@ -21,8 +21,8 @@ let penalty = {
         active: false, 
         start: new THREE.Vector3(), // Initialize with Vector3 to avoid 'undefined'
         end: new THREE.Vector3(),   // Initialize with Vector3 to avoid 'undefined'
-        duration: 0.4,
-        animationSet: 'idle' 
+        duration: 0.4, // Duration for player keeper's dive
+        animationSet: 'idle' // Controls which sprite animation sequence is played ('left', 'right', 'idle')
     }
 };
 
@@ -113,7 +113,7 @@ function buyPack() { const cost = 1000; if (playerState.gold >= cost) { playerSt
 function openPack() { const weights = ALL_PLAYERS.map(p => { if (p.rating >= 90) return 1; if (p.rating >= 87) return 5; if (p.rating >= 84) return 20; return 74; }); const totalWeight = weights.reduce((a, b) => a + b, 0); let random = Math.random() * totalWeight; let playerToReveal; for (let i = 0; i < ALL_PLAYERS.length; i++) { random -= weights[i]; if (random <= 0) { playerToReveal = ALL_PLAYERS[i]; break; } } if (!playerState.myPlayers.includes(playerToReveal.id)) { playerState.myPlayers.push(playerToReveal.id); } else { playerState.gold += Math.floor(playerToReveal.rating * 5); updateGoldUI(); } savePlayerState(); runPackAnimation(playerToReveal); }
 function runPackAnimation(player) { const flagEl = document.getElementById('reveal-flag'), posEl = document.getElementById('reveal-position'), cardContainer = document.getElementById('reveal-card-container'), continueBtn = document.getElementById('pack-continue-btn'); flagEl.style.opacity = 0; posEl.style.opacity = 0; cardContainer.innerHTML = ''; continueBtn.style.display = 'none'; const oldFlare = document.querySelector('.walkout-flare'); if (oldFlare) oldFlare.remove(); setTimeout(() => { flagEl.style.backgroundImage = `url(https://flagcdn.com/h120/${player.nation}.png)`; flagEl.style.opacity = 1; flag.style.transform = 'scale(1)'; }, 500); setTimeout(() => { posEl.textContent = player.position; posEl.style.opacity = 1; posEl.style.transform = 'scale(1)'; }, 1500); setTimeout(() => { const card = createPlayerCard(player); cardContainer.appendChild(card); if (player.rating >= 86) { const flare = document.createElement('div'); flare.className = 'walkout-flare'; cardContainer.appendChild(flare); } }, 2500); setTimeout(() => { continueBtn.style.display = 'block'; }, 3500); }
 
-// --- 3D Environment Loading (unchanged) ---
+// --- 3D Environment Loading ---
 function loadEnvironment() {
     const grassColorMap = textureLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg');
     grassColorMap.wrapS = THREE.RepeatWrapping; grassColorMap.wrapT = THREE.RepeatWrapping; grassColorMap.repeat.set(25, 25);
@@ -151,20 +151,25 @@ function loadEnvironment() {
 // --- Character Loading: 3D Shooter and 2D Animated Keeper ---
 function loadCharacters(gltfLoader) {
     // 3D SHOOTER MODEL loading
-    // THIS URL IS NOW CONFIRMED CORRECT, WITH SPACES ENCODED AS %20 by jsDelivr
+    // Using the confirmed URL with spaces:
     const shooterURL = 'https://cdn.jsdelivr.net/gh/Jonny606/Games@main/models/Soccer%20Penalty%20Kick.glb'; 
 
     gltfLoader.load(shooterURL, (gltf) => { 
         shooter = gltf.scene;
-        // ... (rest of shooter setup) ...
+        shooter.scale.set(0.006, 0.006, 0.006); 
+        shooter.position.set(0, 0, 11.5);
+        shooter.rotation.y = Math.PI;
+        shooter.traverse(node => { if (node.isMesh) { node.castShadow = true; } });
+        scene.add(shooter);
     }, undefined, function (error) { 
         console.error('Error loading shooter model:', error);
     });
-// CALL THE NEW FUNCTION FROM goalkeeper.js to load keeper assets
+
+    // Call the function from goalkeeper.js to load keeper assets and initialize keeper mesh.
     loadKeeperSpritesAndModel(); 
 }
 
-// --- Realistic Physics Simulation (unchanged) ---
+// --- Realistic Physics Simulation ---
 function updateBallPhysics(delta) {
     if (!ball || !ball.velocity) {
         return;
@@ -295,28 +300,55 @@ function shootBall() {
     const maxTotalSpin = 120; 
     ball.angularVelocity.clampLength(0, maxTotalSpin);
 
+    // Call the locally defined triggerKeeperDive function. THIS IS THE FIX.
     triggerKeeperDive(); 
 }
 
-// NEW FUNCTION: Simulates the opponent's shot
+// Function to initiate goalkeeper's dive reaction to player's shot (DEFINED HERE)
+function triggerKeeperDive() { 
+    const random = Math.random(); 
+    let diveTargetX = 0; 
+
+    if (random < 0.33) { 
+        diveTargetX = -2.5; 
+        penalty.keeperDive.animationSet = 'left';
+    } else if (random < 0.66) { 
+        diveTargetX = 2.5; 
+        penalty.keeperDive.animationSet = 'right';
+    } else { 
+        diveTargetX = 0; 
+        penalty.keeperDive.animationSet = 'right'; 
+    }
+
+    if(keeper) { 
+        penalty.keeperDive.active = true; 
+        penalty.keeperDive.startTime = clock.getElapsedTime(); 
+        penalty.keeperDive.start.copy(keeper.position); 
+        penalty.keeperDive.end.set(diveTargetX, keeper.position.y, keeper.position.z);
+        penalty.keeperDive.duration = 0.4; 
+    } 
+    penalty.state = PENALTY_STATE.ANIMATING_KEEPER; 
+}
+
+
+// NEW FUNCTION: Simulates the opponent's shot sequence (DEFINED HERE)
 function triggerOpponentShot() {
     if (!ball || !keeper) return; 
 
     penalty.state = PENALTY_STATE.OPPONENT_SHOT;
     ball.visible = true; 
 
-    // Position ball at opponent's theoretical kick spot
     const OPPONENT_KICK_DISTANCE = -11; 
     ball.position.set(0, 0.2, OPPONENT_KICK_DISTANCE); 
     ball.velocity.set(0, 0, 0); 
     ball.angularVelocity.set(0, 0, 0);
 
-    const targetX = Math.random() * 6 - 3; 
-    const targetY = Math.random() * 2;   
+    const opponentShotTargetX = Math.random() * 6 - 3; 
+    const opponentShotTargetY = Math.random() * 2;   
     
-    const opponentAimPoint = new THREE.Vector3(targetX, targetY, 0.5); 
-    const direction = opponentAimPoint.sub(ball.position).normalize();
-
+    const opponentAimPoint = new THREE.Vector3(opponentShotTargetX, opponentShotTargetY, 0.5); 
+    const direction = opponentAimPoint.clone().sub(ball.position).normalize();
+    
     const opponentPower = Math.random() * 10 + 25; 
     const opponentInaccuracyFactor = Math.random() * 0.3; 
     direction.x += (Math.random() - 0.5) * opponentInaccuracyFactor * 2; 
@@ -327,46 +359,39 @@ function triggerOpponentShot() {
     ball.angularVelocity.set(Math.random() * 5, (Math.random() - 0.5) * 20, Math.random() * 10);
     ball.angularVelocity.clampLength(0, 100);
 
-    // Trigger YOUR keeper's dive reaction to opponent's incoming shot
-    let diveTargetXForOpponentShot = 0;
-    let diveAnimSetForOpponentShot = 'right'; 
+    let keeperReactionDiveTargetX = 0;
+    let keeperReactionDiveAnimSet = 'right'; 
 
     const ballCurrentPos = ball.position.clone();
     const ballCurrentVel = ball.velocity.clone();
     
-    // Estimate ball's X at Z=0.5
     const timeToGoalLine = (ballCurrentPos.z - 0.5) / -ballCurrentVel.z; 
 
-    if (timeToGoalLine > 0) { 
+    if (timeToGoalLine > 0 && ballCurrentVel.z > 0.1) { 
         const estimatedImpactX = ballCurrentPos.x + ballCurrentVel.x * timeToGoalLine;
 
         if (estimatedImpactX < -1) { 
-            diveTargetXForOpponentShot = -2.5; 
-            diveAnimSetForOpponentShot = 'left';
+            keeperReactionDiveTargetX = -2.5; keeperReactionDiveAnimSet = 'left';
         } else if (estimatedImpactX > 1) { 
-            diveTargetXForOpponentShot = 2.5; 
-            diveAnimSetForOpponentShot = 'right';
+            keeperReactionDiveTargetX = 2.5; keeperReactionDiveAnimSet = 'right';
         } else { 
             const randCentralDive = Math.random();
-            if(randCentralDive < 0.5) { 
-                 diveTargetXForOpponentShot = -1.5; diveAnimSetForOpponentShot = 'left';
-            } else {
-                 diveTargetXForOpponentShot = 1.5; diveAnimSetForOpponentShot = 'right';
-            }
+            if(randCentralDive < 0.5) { keeperReactionDiveTargetX = -1.5; keeperReactionDiveAnimSet = 'left'; } 
+            else { keeperReactionDiveTargetX = 1.5; keeperReactionDiveAnimSet = 'right'; }
         }
     }
 
-    // Set YOUR keeper's dive state, using `keeperDive` object
     penalty.keeperDive.active = true;
     penalty.keeperDive.startTime = clock.getElapsedTime();
-    penalty.keeperDive.start = keeper.position.clone(); 
-    penalty.keeperDive.end = new THREE.Vector3(diveTargetXForOpponentShot, keeper.position.y, keeper.position.z);
+    penalty.keeperDive.start.copy(keeper.position); 
+    penalty.keeperDive.end.set(keeperReactionDiveTargetX, keeper.position.y, keeper.position.z);
     penalty.keeperDive.duration = 0.5; 
-    penalty.keeperDive.animationSet = diveAnimSetForOpponentShot; 
+    penalty.keeperDive.animationSet = keeperReactionDiveAnimSet; 
 
     if (shooter) shooter.visible = false; 
     document.getElementById('aim-reticle').classList.remove('visible'); 
 }
+
 
 // Manages the transition TO the opponent's shot phase
 function handleKeeperTurn() { 
@@ -434,26 +459,30 @@ function checkGoalAndSave(ballPos) {
         } 
     }
 
-    // Now, determine if it's a "MISS!" if ball is far from goal. This is crucial for states after it passes goal line area.
-    // Ensure the ball moves far enough from the target before declaring MISS
-    const checkZMissThresholdPlayer = -5; // Player's shot passes the goal
-    const checkZMissThresholdOpponent = 5;  // Opponent's shot passes player's "area" (goal is Z=0)
-    
-    // Condition to trigger a miss *after* it's past the goal area if no other outcome was found
     if (outcome === null) {
+        let isPastPlayArea = false;
+        const CHECK_Z_PAST_PLAYER_GOAL = -5; 
+        const CHECK_Z_PAST_OPPONENT_SHOOTER = 5; 
+
         if (penalty.state === PENALTY_STATE.SHOT_TAKEN || penalty.state === PENALTY_STATE.ANIMATING_KEEPER) { // Player's Shot
-            if (ballPos.z < checkZMissThresholdPlayer || Math.abs(ballPos.x) > 4 || ballPos.y < -0.5 || ballPos.y > 5) {
-                outcome = "MISS!";
+            if (ballPos.z < CHECK_Z_PAST_PLAYER_GOAL || ballPos.z > 15) { // Check both ways in Z. Max player shoot is Z=11 to 0. Past 0 to -5. Or wildly missed backward.
+                isPastPlayArea = true;
             }
         } else if (penalty.state === PENALTY_STATE.OPPONENT_SHOT) { // Opponent's Shot
-             if (ballPos.z > checkZMissThresholdOpponent || Math.abs(ballPos.x) > 4 || ballPos.y < -0.5 || ballPos.y > 5) {
-                outcome = "MISS!";
+             if (ballPos.z > CHECK_Z_PAST_OPPONENT_SHOOTER || ballPos.z < -15) { // Check both ways in Z. Opponent shoot from -11 to 0. Past 0 to 5. Or wildly missed backward.
+                isPastPlayArea = true;
             }
         }
+
+        const isTooWide = Math.abs(ballPos.x) > 5; 
+        const isTooHighOrLow = ballPos.y < -0.5 || ballPos.y > 6; 
+
+        if (isPastPlayArea || isTooWide || isTooHighOrLow) {
+            outcome = "MISS!";
+        }
     }
-
-
-    // Now, handle score updates based on the final determined outcome
+    
+    // Update scores based on outcome and current turn type
     if (outcome === "GOAL!") {
         if (penalty.state === PENALTY_STATE.SHOT_TAKEN || penalty.state === PENALTY_STATE.ANIMATING_KEEPER) { 
             penalty.playerScore++; 
@@ -461,11 +490,9 @@ function checkGoalAndSave(ballPos) {
             penalty.opponentScore++;
         }
     }
-    // For "SAVE!" or "MISS!", no score update.
     
-    return outcome; // Returns "GOAL!", "SAVE!", "MISS!", or null
+    return outcome; 
 }
-
 
 function showResultMessage(msg, callback) { 
     const el = document.getElementById('result-message'); 
@@ -487,7 +514,7 @@ function resetBall() {
 }
 
 function resetKeeper() { 
-    resetGoalkeeperState(); // This calls the function from goalkeeper.js
+    resetGoalkeeperState(); // Calls function from goalkeeper.js
     penalty.keeperDive.active = false;
     penalty.keeperDive.animationSet = 'idle'; 
 }
@@ -503,13 +530,13 @@ function animate() {
         document.getElementById('power-bar-inner').style.width = `${penalty.shotPower}%`; 
     }
     
-    // Call the external goalkeeper update function to manage its animations and position
+    // Call the external goalkeeper update function (handles both player's and opponent's active dives)
     updateGoalkeeper(delta, penalty); 
 
     // Apply ball physics and check outcomes ONLY IF a ball is actively in flight.
     if (penalty.state === PENALTY_STATE.ANIMATING_KEEPER || 
-        penalty.state === PENALTY_STATE.SHOT_TAKEN ||
-        penalty.state === PENALTY_STATE.OPPONENT_SHOT) 
+        penalty.state === PENALTY_STATE.SHOT_TAKEN ||           
+        penalty.state === PENALTY_STATE.OPPONENT_SHOT)          
     {
         updateBallPhysics(delta); 
 
@@ -534,7 +561,7 @@ function animate() {
         
         if (outcome) { 
             penalty.state = PENALTY_STATE.END_ROUND; 
-            showResultMessage(outcome, endRound); // Let endRound handle the actual turn progression after message
+            showResultMessage(outcome, endRound); 
         }
     } 
     
