@@ -86,15 +86,15 @@
         </div>
 
     </div>
- <!-- Core Three.js library -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+   <!-- Core Three.js library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-  <!-- GLTFLoader for .glb models -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<!-- GLTFLoader is needed for .glb models -->
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
 
-  <!-- Your game logic (players.js must come before game.js if it defines ALL_PLAYERS) -->
-  <script src="players.js"></script>
-  <script src="game.js"></script>
+<!-- Load OUR game scripts LAST and in order -->
+<script src="../js/players.js"></script>      <!-- Must be first for player data -->
+<script src="../js/goalkeeper.js"></script>  <!-- NEW: Must be before game.js as game.js calls its functions -->
+<script src="../js/game.js"></script>        <!-- Game logic, relies on players.js and goalkeeper.js -->
 </body>
 </html>
-
